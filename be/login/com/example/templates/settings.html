@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>환경설정</title>
+</head>
+<body>
+    <h2>환경설정</h2>
+
+    <label>닉네임:</label>
+    <input type="text" id="nickname" placeholder="닉네임 입력" /><br /><br />
+
+    <label>비밀번호:</label>
+    <input type="password" id="password" placeholder="새 비밀번호 입력" /><br /><br />
+
+    <label>
+        <input type="checkbox" id="pushToggle" />
+        푸시 알림 받기
+    </label><br /><br />
+
+    <button id="saveBtn">저장하기</button>
+    <div id="msg" style="margin-top: 20px;"></div>
+
+    <script>
+        async function loadSettings() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
+            const res = await fetch('/user/settings', {
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+
+            if (!res.ok) {
+                alert('설정을 불러오지 못했습니다.');
+                if(res.status === 401){
+                    localStorage.removeItem('jwt');
+                    window.location.href = '/login';
+                }
+                return;
+            }
+
+            const data = await res.json();
+            document.getElementById('nickname').value = data.nickname || '';
+            document.getElementById('pushToggle').checked = data.push_notifications_enabled || false;
+        }
+
+        async function saveSettings() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
+            const nickname = document.getElementById('nickname').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const pushEnabled = document.getElementById('pushToggle').checked;
+
+            const payload = {
+                push_notifications_enabled: pushEnabled
+            };
+            if (nickname) payload.nickname = nickname;
+            if (password) payload.password = password;
+
+            const res = await fetch('/user/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + jwt
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const msgDiv = document.getElementById('msg');
+            if (res.ok) {
+                msgDiv.innerText = '설정이 저장되었습니다.';
+                document.getElementById('password').value = '';
+            } else {
+                msgDiv.innerText = '저장 실패. 다시 시도해주세요.';
+                if(res.status === 401){
+                    localStorage.removeItem('jwt');
+                    window.location.href = '/login';
+                }
+            }
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', saveSettings);
+        window.onload = loadSettings;
+    </script>
+</body>
+</html>
