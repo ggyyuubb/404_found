@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wearther</string>
+
+    <!-- Google 로그인용 client ID (임시로 더미값 넣기 가능) -->
+    <string name="default_web_client_id">dummy-client-id.apps.googleusercontent.com</string>
+</resources>

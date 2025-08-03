@@ -1,1 +1,2 @@
-be/login/upload/serviceAccountKey.json
+# 비밀키 파일 제외
+**/serviceAccountKey.json
