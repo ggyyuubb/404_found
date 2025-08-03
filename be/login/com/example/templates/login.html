@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>로그인</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <h2>로그인</h2>
+    <form id="loginForm">
+        <label>이메일:</label>
+        <input type="email" id="email" required /><br />
+        <label>비밀번호:</label>
+        <input type="password" id="password" required /><br />
+        <button type="submit">로그인</button>
+    </form>
+
+    <div id="result" style="margin-top: 20px;"></div>
+
+    <div id="userSection" style="display:none; margin-top: 20px;">
+        <button id="logoutBtn">로그아웃</button><br /><br />
+        <a href="/upload">이미지 업로드</a><br />
+        <a href="/upload/my_images_page">내 이미지 보기</a><br /><br />
+        <button id="recommendBtn">추천 받기</button>
+        <button id="settingsBtn">환경설정</button>
+        <button id="outfitsHistoryBtn">추천코디 히스토리</button>
+        <button id="allOutfitsHistoryBtn">전체 추천코디 히스토리</button>
+        <button id="communityBtn">커뮤니티</button>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCIwz5Kpka8ql5K3iMTD78t_oUy7PGK1fw",
+            authDomain: "wearther-404found.firebaseapp.com",
+            projectId: "wearther-404found",
+            storageBucket: "wearther-404found.firebasestorage.app",
+            messagingSenderId: "932275548518",
+            appId: "1:932275548518:android:ba03e3f7332ce727ff58a7"
+        };
+        firebase.initializeApp(firebaseConfig);
+
+        const loginForm = document.getElementById('loginForm');
+        const userSection = document.getElementById('userSection');
+        const resultDiv = document.getElementById('result');
+
+        function showLoginUI() {
+            loginForm.style.display = 'block';
+            userSection.style.display = 'none';
+            resultDiv.innerHTML = '';
+        }
+
+        function showUserUI(nickname) {
+            loginForm.style.display = 'none';
+            userSection.style.display = 'block';
+            resultDiv.innerHTML = `<p>로그인 성공! 닉네임: ${nickname}</p>`;
+        }
+
+        window.onload = async () => {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                showLoginUI();
+                return;
+            }
+            try {
+                const res = await fetch('/auth/verify_token', {
+                    headers: { 'Authorization': 'Bearer ' + jwt }
+                });
+                if (res.ok) {
+                    showUserUI('로그인된 사용자');
+                } else {
+                    localStorage.removeItem('jwt');
+                    showLoginUI();
+                }
+            } catch {
+                localStorage.removeItem('jwt');
+                showLoginUI();
+            }
+        };
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                const idToken = await user.getIdToken();
+
+                const response = await fetch('/auth/firebase/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + idToken }
+                });
+                const result = await response.json();
+
+                // 디버깅용
+                console.log('백엔드 응답:', result);
+
+                if (response.status === 200 && result.token) {
+                    localStorage.setItem('jwt', result.token);
+                    showUserUI(result.nickname || result.email || '로그인된 사용자');
+                } else {
+                    alert(result.message || result.error || "로그인 실패");
+                }
+            } catch (err) {
+                alert("로그인 실패: " + (err.message || err));
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('jwt');
+            firebase.auth().signOut();
+            showLoginUI();
+            alert('로그아웃 되었습니다.');
+        });
+
+        document.getElementById('settingsBtn').addEventListener('click', () => {
+            window.location.href = '/user/settings_page';
+        });
+
+        document.getElementById('recommendBtn').addEventListener('click', () => {
+            window.location.href = '/recommendation';
+        });
+
+        document.getElementById('outfitsHistoryBtn').addEventListener('click', () => {
+            window.location.href = '/api/history/outfits_history';  // ✅ 변경된 올바른 경로
+        });
+
+        document.getElementById('allOutfitsHistoryBtn').addEventListener('click', () => {
+            window.location.href = '/api/history/all_outfits_history';
+        });
+
+        document.getElementById('communityBtn').addEventListener('click', () => {
+            window.location.href = '/community';
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
