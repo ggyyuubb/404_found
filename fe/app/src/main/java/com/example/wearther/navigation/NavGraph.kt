@@ -17,8 +17,6 @@ import com.example.wearther.setting.screen.EditNicknameScreen
 import com.example.wearther.setting.screen.RegisterScreen
 import com.example.wearther.setting.screen.SettingScreen
 import com.example.wearther.closet.screen.ClosetScreen
-import com.example.wearther.closet.upload.UploadApi
-import com.example.wearther.closet.upload.UploadResponse
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
