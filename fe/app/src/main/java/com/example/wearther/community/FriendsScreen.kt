@@ -1,4 +1,4 @@
-package com.example.wearther.community.screen
+package com.example.wearther.community
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
