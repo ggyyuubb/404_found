@@ -92,6 +92,8 @@ dependencies {
     implementation ("com.google.accompanist:accompanist-swiperefresh:0.31.5-beta")
 
     implementation ("androidx.compose.runtime:runtime-livedata:1.5.4")
+    implementation ("androidx.activity:activity-compose:1.7.2")
+
 
     val camerax_version = "1.3.0"
 
@@ -104,6 +106,7 @@ dependencies {
 // Camera 권한을 위한 activity-compose도 함께 권장
     implementation("androidx.activity:activity-compose:1.8.2")
 
+    implementation ("com.google.code.gson:gson:2.10.1")
 
 
     implementation ("com.squareup.okhttp3:okhttp:4.11.0")

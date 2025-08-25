@@ -31,8 +31,7 @@ def ai_recommend():
     try:
         res = requests.post(
             "https://wearther-api-932275548518.asia-northeast3.run.app/recommend",
-            json={"user_id": uid, "city": city},  # 반드시 Firebase UID로!
-            timeout=20
+            json={"user_id": uid, "city": city}  # 반드시 Firebase UID로!
         )
         res.raise_for_status()
         ai_result = res.json()

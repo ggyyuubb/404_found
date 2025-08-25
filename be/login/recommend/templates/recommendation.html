@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 추천 결과</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        h1 { font-size: 2em; }
+        #recommendResult { margin-top: 20px; }
+        img { margin-top: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .result-list { margin-top: 16px; }
+        .result-list li { margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <h1>AI 추천 결과</h1>
+    <button id="recommendBtn">AI 추천 받기</button>
+    <div id="recommendResult"></div>
+    <script>
+        document.getElementById('recommendBtn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('recommendResult');
+            resultDiv.innerHTML = '추천 결과 불러오는 중...';
+
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                resultDiv.innerHTML = '로그인이 필요합니다.';
+                return;
+            }
+            try {
+                const response = await fetch('/api/recommend/recommendations/ai', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + jwt,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ city: 'Seoul' })
+                });
+
+                if (!response.ok) throw new Error('추천 API 호출 실패');
+                const data = await response.json();
+
+                const rec = data.recommended || {};
+                let html = '<ul class="result-list">';
+                // 상의
+                if ('top' in rec) {
+                    if (rec.top && typeof rec.top === 'object') {
+                        html += `<li>상의: ${rec.top.category || ''} (${rec.top.filename || ''})`;
+                        if (rec.top.url) html += `<br><img src="${rec.top.url}" width="150">`;
+                        html += `</li>`;
+                    } else {
+                        html += `<li>상의: ${rec.top}</li>`;
+                    }
+                }
+                // 하의
+                if ('bottom' in rec) {
+                    if (rec.bottom && typeof rec.bottom === 'object') {
+                        html += `<li>하의: ${rec.bottom.category || ''} (${rec.bottom.filename || ''})`;
+                        if (rec.bottom.url) html += `<br><img src="${rec.bottom.url}" width="150">`;
+                        html += `</li>`;
+                    } else {
+                        html += `<li>하의: ${rec.bottom}</li>`;
+                    }
+                }
+                // 아우터
+                if ('outer' in rec) {
+                    if (rec.outer && typeof rec.outer === 'object') {
+                        html += `<li>아우터: ${rec.outer.category || ''} (${rec.outer.filename || ''})`;
+                        if (rec.outer.url) html += `<br><img src="${rec.outer.url}" width="150">`;
+                        html += `</li>`;
+                    } else {
+                        html += `<li>아우터: ${rec.outer}</li>`;
+                    }
+                }
+                if (data.temp) html += `<li>기온: ${data.temp}℃</li>`;
+                if (data.weather_code !== undefined) html += `<li>날씨코드: ${data.weather_code}</li>`;
+                html += '</ul>';
+                resultDiv.innerHTML = html;
+            } catch (e) {
+                resultDiv.innerHTML = '오류: ' + e.message;
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
