@@ -1,6 +1,9 @@
 from flask import Blueprint, current_app, request, jsonify, render_template
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import bcrypt
+from firebase_admin import storage
+from datetime import datetime
+import uuid
 
 user_edit_bp = Blueprint('user_edit', __name__)
 
@@ -21,7 +24,8 @@ def get_settings():
     user = user_doc.to_dict()
     return jsonify({
         "push_notifications_enabled": user.get('push_notifications_enabled', False),
-        "nickname": user.get('nickname', '')
+        "nickname": user.get('nickname', ''),
+        "profile_image": user.get('profile_image', '')
     }), 200
 
 @user_edit_bp.route('/user/settings', methods=['PUT'])
@@ -51,4 +55,19 @@ def update_settings():
     user_ref.update(updates)
     return jsonify({"message": "설정이 성공적으로 업데이트되었습니다."}), 200
 
-
+@user_edit_bp.route('/user/profile_image', methods=['POST'])
+@jwt_required()
+def upload_profile_image():
+    db = current_app.db
+    uid = get_jwt_identity()
+    if 'image' not in request.files:
+        return jsonify({"message": "이미지 파일이 필요합니다."}), 400
+    file = request.files['image']
+    filename = f"profile_{uid}_{uuid.uuid4().hex}.jpg"
+    bucket = storage.bucket()
+    blob = bucket.blob(f"profile_images/{filename}")
+    blob.upload_from_file(file, content_type=file.content_type)
+    blob.make_public()
+    url = blob.public_url
+    db.collection('users').document(uid).update({'profile_image': url})
+    return jsonify({"message": "프로필 이미지가 변경되었습니다.", "url": url}), 200

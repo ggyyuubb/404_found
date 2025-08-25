@@ -4,6 +4,8 @@
 
 package com.example.wearther.home.weather
 
+import com.google.gson.annotations.SerializedName
+
 // ✅ 전체 응답 데이터 구조
 data class WeatherResponse(
     val timezone: String, // 예: "Asia/Seoul"
@@ -21,7 +23,7 @@ data class CurrentWeather(
     val wind_speed: Double, // 풍속 (m/s)
     val clouds: Int, // 구름 양 (%)
     val weather: List<WeatherInfo>, // 날씨 설명 및 아이콘 정보 (리스트로 감싸져 있음)
-    val rain: Map<String, Double>? = null // 강수량 정보 (예: {"1h": 0.5}), 없을 수 있음
+    @SerializedName("rain") val rain: RainInfo? = null // 강수량 정보, 없을 수 있음
 )
 
 // ✅ 시간별 날씨 예보 (보통 48개 항목)
@@ -34,17 +36,17 @@ data class HourlyWeather(
     val clouds: Int, // 구름 양
     val weather: List<WeatherInfo>, // 날씨 설명
     val pop: Double, // 강수 확률 (0.0 ~ 1.0)
-    val rain: Map<String, Double>? = null, // 시간별 강수량
-    val snow: Map<String, Double>? = null // 시간별 적설량 (있을 수 있음)
+    @SerializedName("rain") val rain: RainInfo? = null, // 시간별 강수량
+    @SerializedName("snow") val snow: RainInfo? = null // 시간별 적설량 (있을 수 있음)
 )
 
-// ✅ 일별 날씨 예보 (보통 7일치)
+// ✅ 일별 날씨 예보 (보통 7일치) - rain 필드 수정
 data class DailyWeather(
     val dt: Long, // 날짜 (timestamp)
     val temp: Temp, // 하루 온도 정보
     val weather: List<WeatherInfo>, // 날씨 설명
     val pop: Double, // 강수 확률
-    val rain: Map<String, Double>? = null // 일간 강수량 정보
+    @SerializedName("rain") val rain: Double? = null // ✅ Double로 변경 (API에서 숫자로 오는 경우)
 )
 
 // ✅ 하루 중 온도 정보
@@ -52,6 +54,11 @@ data class Temp(
     val min: Double, // 최저 기온
     val max: Double, // 최고 기온
     val day: Double // 낮 시간대 평균 기온
+)
+
+// ✅ 강수량 정보 (시간별용)
+data class RainInfo(
+    @SerializedName("1h") val oneHour: Double? = null
 )
 
 // ✅ 날씨 설명 정보 (현재, 시간별, 일별에서 공통 사용)

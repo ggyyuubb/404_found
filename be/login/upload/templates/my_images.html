@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>내 이미지 보기</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        h2 { margin-bottom: 20px; }
+        .filter-box { margin-bottom: 20px; }
+        .image-card {
+            display: inline-block;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px;
+            text-align: center;
+            background: #fafafa;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            vertical-align: top;
+        }
+        .image-card img { width: 150px; height: 150px; object-fit: cover; border-radius: 4px; }
+        .image-meta { font-size: 13px; color: #555; margin: 8px 0; }
+        .delete-btn, .edit-btn {
+            background: #e74c3c; color: #fff; border: none; border-radius: 4px;
+            padding: 6px 12px; cursor: pointer; margin-top: 8px;
+        }
+        .edit-btn { background: #3498db; margin-left: 6px; }
+        .edit-btn:hover { background: #217dbb; }
+        .delete-btn:hover { background: #c0392b; }
+        .edit-form { margin-top: 8px; font-size: 13px; background: #f4f8fb; padding: 8px; border-radius: 6px; }
+        .edit-form input { width: 80px; margin-right: 6px; }
+        .edit-form button { padding: 4px 10px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h2>내 이미지 목록</h2>
+    <div class="filter-box">
+        <label for="categoryFilter">카테고리:</label>
+        <input type="text" id="categoryFilter" placeholder="카테고리 입력" />
+        <label for="typeFilter" style="margin-left:10px;">타입:</label>
+        <input type="text" id="typeFilter" placeholder="타입 입력" />
+        <button onclick="loadImages()">검색</button>
+    </div>
+    <div id="imageList"></div>
+    <script>
+        let editOpenId = null;
+
+        async function loadImages() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+            const category = document.getElementById('categoryFilter').value.trim();
+            const type = document.getElementById('typeFilter').value.trim();
+            let url = '/upload/my_images';
+            const filters = [];
+            if (category) filters.push(`category=${encodeURIComponent(category)}`);
+            if (type) filters.push(`type=${encodeURIComponent(type)}`);
+            if (filters.length > 0) url += '?' + filters.join('&');
+            const res = await fetch(url, {
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (!res.ok) {
+                alert('이미지를 불러오지 못했습니다.');
+                return;
+            }
+            const data = await res.json();
+            const container = document.getElementById('imageList');
+            container.innerHTML = '';
+            if (!data.images || data.images.length === 0) {
+                container.innerHTML = '<p>등록된 이미지가 없습니다.</p>';
+                return;
+            }
+            data.images.forEach(img => {
+                const div = document.createElement('div');
+                div.className = 'image-card';
+                div.innerHTML = `
+                    <img src="${img.url}" alt="내 이미지" /><br/>
+                    <div class="image-meta">
+                        <strong>카테고리:</strong> ${img.category || '-'}<br/>
+                        <strong>타입:</strong> ${img.type || '-'}
+                    </div>
+                    <button class="delete-btn" onclick="deleteImage('${img.id}')">삭제</button>
+                    <button class="edit-btn" onclick="openEditForm('${img.id}', '${img.category || ''}', '${img.type || ''}')">수정</button>
+                    <div id="editForm-${img.id}" style="display:none;"></div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function openEditForm(imageId, category, type) {
+            // 닫기
+            if (editOpenId && editOpenId !== imageId) {
+                document.getElementById('editForm-' + editOpenId).style.display = 'none';
+            }
+            editOpenId = imageId;
+            const formDiv = document.getElementById('editForm-' + imageId);
+            formDiv.style.display = '';
+            formDiv.innerHTML = `
+                <form class="edit-form" onsubmit="submitEdit(event, '${imageId}')">
+                    <label>카테고리: <input type="text" name="category" value="${category}" /></label>
+                    <label>타입: <input type="text" name="type" value="${type}" /></label>
+                    <button type="submit">저장</button>
+                    <button type="button" onclick="closeEditForm('${imageId}')">취소</button>
+                </form>
+            `;
+        }
+
+        function closeEditForm(imageId) {
+            document.getElementById('editForm-' + imageId).style.display = 'none';
+            editOpenId = null;
+        }
+
+        async function submitEdit(e, imageId) {
+            e.preventDefault();
+            const jwt = localStorage.getItem('jwt');
+            const form = e.target;
+            const category = form.category.value.trim();
+            const type = form.type.value.trim();
+            const payload = {};
+            if (category) payload.category = category;
+            if (type) payload.type = type;
+            const res = await fetch(`/upload/edit_image/${imageId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert('수정 성공!');
+                closeEditForm(imageId);
+                loadImages();
+            } else {
+                const error = await res.json();
+                alert('수정 실패: ' + (error.error || '알 수 없는 오류'));
+            }
+        }
+
+        async function deleteImage(imageId) {
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            const jwt = localStorage.getItem('jwt');
+            const res = await fetch(`/upload/delete_image/${imageId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) {
+                alert('삭제 성공!');
+                loadImages();
+            } else {
+                const error = await res.json();
+                alert('삭제 실패: ' + (error.error || '알 수 없는 오류'));
+            }
+        }
+        window.onload = () => { loadImages(); }
+        window.openEditForm = openEditForm;
+        window.closeEditForm = closeEditForm;
+        window.submitEdit = submitEdit;
+    </script>
+</body>
+</html>
+
+

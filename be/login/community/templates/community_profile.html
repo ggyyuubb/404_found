@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>프로필</title>
+</head>
+<body>
+  <h2>프로필</h2>
+  <div>
+    <b>닉네임:</b> {{ user.nickname or user.user_id }}<br>
+    <b>이메일:</b> {{ user.email }}<br>
+    <b>가입일:</b> {{ created_at }}<br>
+    <!-- 친구추가 버튼: 본인 프로필에서는 숨김, 이미 친구면 메시지 -->
+    {% if current_user_id and user.user_id != current_user_id %}
+      {% if not is_friend %}
+        <button id="addFriendBtn" onclick="addFriend()">친구추가</button>
+        <span id="friendStatus"></span>
+      {% else %}
+        <span style="color:green;">이미 친구입니다.</span>
+      {% endif %}
+    {% endif %}
+  </div>
+  <h3>친구 목록</h3>
+  <ul>
+    {% for friend in friends %}
+      <li>{{ friend.nickname }} ({{ friend.email }})</li>
+    {% else %}
+      <li>친구가 없습니다.</li>
+    {% endfor %}
+  </ul>
+  <h3>게시물</h3>
+  {% for post in posts %}
+    <div style="border:1px solid #ccc;margin:8px;padding:8px;">
+      <span>{{ post.created_at }}</span><br>
+      <span>{{ post.content }}</span>
+    </div>
+  {% else %}
+    <div>게시물이 없습니다.</div>
+  {% endfor %}
+  <a href="/community">← 커뮤니티로 돌아가기</a>
+  <script>
+    async function addFriend() {
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        alert('로그인 필요');
+        return;
+      }
+      const userId = "{{ user.user_id }}";
+      const res = await fetch(`/community/add_friend/${userId}`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + jwt }
+      });
+      if (res.ok) {
+        document.getElementById('friendStatus').textContent = '친구 추가 완료!';
+        document.getElementById('addFriendBtn').disabled = true;
+      } else {
+        document.getElementById('friendStatus').textContent = '이미 친구이거나 오류!';
+      }
+    }
+  </script>
+</body>
+</html>
