@@ -19,28 +19,39 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wearther.home.recommendation.HomeBottomSheetContent
 import com.example.wearther.home.recommendation.RecommendationViewModel
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import androidx.lifecycle.viewmodel.compose.viewModel
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: WeatherViewModel, // ✅ NavGraph에서 받은 거 그대로
     recommendationViewModel: RecommendationViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val isDarkTheme = isSystemInDarkTheme()
+
+    // ✅ WeatherViewModel을 Context와 함께 생성
+    val weatherViewModel: WeatherViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return WeatherViewModel(context) as T
+            }
+        }
+    )
 
     // ✅ 테마에 따른 바텀시트 색상 설정
     val sheetBackgroundColor = if (isDarkTheme) Color(0xFF333333) else Color(0xFFF0F0F0)
     val sheetTextColor = if (isDarkTheme) Color.White else Color.Black
 
     // ✅ 날씨 상태 및 위치 텍스트 관찰
-    val weather by viewModel.weatherData.collectAsState()
-    val locationText by viewModel.locationText.collectAsState()
+    val weather by weatherViewModel.weatherData.collectAsState()
+    val locationText by weatherViewModel.locationText.collectAsState()
+    val savedLocations by weatherViewModel.savedLocations.collectAsState()
 
     // ✅ 스낵바 상태 및 코루틴 스코프 정의
     val snackbarHostState = remember { SnackbarHostState() }
@@ -64,6 +75,9 @@ fun HomeScreen(
     // ✅ 권한이 허용된 경우 날씨와 추천 데이터를 최초 1회 불러오기
     LaunchedEffect(locationGranted) {
         if (locationGranted) {
+            // 처음 실행 시 현재 위치 날씨 가져오기
+            weatherViewModel.fetchCurrentLocationWeather()
+
             val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
             val jwt = sharedPreferences.getString("jwt", null)
 
@@ -118,10 +132,10 @@ fun HomeScreen(
             ) {
                 IconButton(onClick = {
                     coroutineScope.launch {
-                        viewModel.clearWeather()
+                        weatherViewModel.clearWeather()
                         getCurrentLocation(context)?.let { location ->
-                            viewModel.fetchWeather(location.latitude, location.longitude)
-                            viewModel.fetchAddress(context, location.latitude, location.longitude)
+                            weatherViewModel.fetchWeather(location.latitude, location.longitude)
+                            weatherViewModel.fetchAddress(context, location.latitude, location.longitude)
                             snackbarHostState.showSnackbar("새로고침 되었습니다")
                         }
                     }
@@ -140,9 +154,39 @@ fun HomeScreen(
                 )
             }
 
-            // ✅ 날씨 정보 표시
+            // ✅ 날씨 정보 표시 (위치 선택 기능 포함)
             weather?.let {
-                WeatherContent(it, locationText, sheetTextColor)
+                WeatherContent(
+                    data = it,
+                    locationText = locationText,
+                    sheetTextColor = sheetTextColor,
+                    savedLocations = savedLocations, // ViewModel에서 가져온 저장된 위치들
+                    onLocationSelect = { location ->
+                        // 위치 선택 시 실행할 로직
+                        weatherViewModel.selectLocation(location)
+
+                        // 추천 데이터도 새 위치에 맞게 업데이트
+                        coroutineScope.launch {
+                            val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
+                            val jwt = sharedPreferences.getString("jwt", null)
+                            if (!jwt.isNullOrEmpty()) {
+                                val city = location.name.split(",").firstOrNull()?.trim() ?: "Seoul"
+                                recommendationViewModel.fetchRecommendations(jwt, city)
+                            }
+                        }
+                    },
+                    onAddLocation = { newLocation ->
+                        weatherViewModel.addLocation(newLocation)
+                    },
+                    onDeleteLocation = { location -> // 👈 삭제 기능 추가!
+                        weatherViewModel.deleteLocation(location.id)
+                    },
+                    onSearchLocation = { query ->
+                        coroutineScope.async {
+                            weatherViewModel.searchLocations(query)
+                        }.await()
+                    }
+                )
             } ?: Text("날씨 정보를 불러오는 중입니다...", color = sheetTextColor)
         }
     }

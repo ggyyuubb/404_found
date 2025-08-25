@@ -1,16 +1,19 @@
+// WeatherContent.kt - 간소화된 버전 (위치 선택 기능 포함)
 package com.example.wearther.home.weather
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -25,7 +28,14 @@ fun WeatherContent(
     locationText: String,
     sheetTextColor: Color,
     itemWidthDp: Dp = 70.dp,
-    itemSpacingDp: Dp = 8.dp
+    itemSpacingDp: Dp = 8.dp,
+    savedLocations: List<SavedLocation> = listOf(
+        SavedLocation("current", "현재 위치", 0.0, 0.0, true)
+    ),
+    onLocationSelect: (SavedLocation) -> Unit = {},
+    onAddLocation: (SavedLocation) -> Unit = {},
+    onDeleteLocation: (SavedLocation) -> Unit = {}, // 👈 삭제 파라미터 추가
+    onSearchLocation: suspend (String) -> List<SavedLocation> = { emptyList() }
 ) {
     val now = Instant.now().atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime()
     val nowText = now.format(DateTimeFormatter.ofPattern("현재 시각: HH시 mm분"))
@@ -33,15 +43,14 @@ fun WeatherContent(
 
     val endTime = now.plusHours(24)
     val filteredHourly = data.hourly.filter {
-        val forecastTime = Instant.ofEpochSecond(it.dt).atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime()
+        val forecastTime = Instant.ofEpochSecond(it.dt)
+            .atZone(ZoneId.of("Asia/Seoul"))
+            .toLocalDateTime()
         forecastTime.isAfter(now) && !forecastTime.isAfter(endTime)
     }
 
-    val temps = filteredHourly.map { it.temp }
-    val minTemp = temps.minOrNull() ?: 0.0
-    val maxTemp = temps.maxOrNull() ?: 0.0
-    val tempRange = (maxTemp - minTemp).takeIf { it >= 1.0 } ?: 5.0
-    val listState = rememberLazyListState()
+    // 위치 선택 모달 상태
+    var showLocationModal by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -49,14 +58,29 @@ fun WeatherContent(
             .padding(bottom = 16.dp)
     ) {
         item {
-            Text(
-                text = locationText.ifBlank { "위치 정보를 불러오는 중..." },
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = sheetTextColor
-                ),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+            // 📍 이모지와 위치 텍스트 (클릭 가능)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLocationModal = true }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = "위치 변경",
+                    tint = sheetTextColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = locationText.ifBlank { "위치 정보를 불러오는 중..." },
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = sheetTextColor
+                    )
+                )
+            }
         }
 
         item {
@@ -112,171 +136,36 @@ fun WeatherContent(
 
         if (filteredHourly.isNotEmpty()) {
             item {
-                LazyRow(
-                    state = listState,
-                    horizontalArrangement = Arrangement.spacedBy(itemSpacingDp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    itemsIndexed(filteredHourly) { _, forecast ->
-                        Column(
-                            modifier = Modifier
-                                .width(itemWidthDp)
-                                .padding(bottom = 60.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            val forecastTime = Instant.ofEpochSecond(forecast.dt)
-                                .atZone(ZoneId.of("Asia/Seoul"))
-                            val hourText = "${forecastTime.hour}시"
-                            val rawMain = forecast.weather.firstOrNull()?.main ?: "Unknown"
-                            val adjustedMain = when {
-                                (forecast.pop * 100).toInt() >= 60 && (forecast.rain?.get("1h") ?: 0.0) >= 1.0 -> "Rain"
-                                (forecast.pop * 100).toInt() in 40..59 -> "Drizzle"
-                                rawMain.equals("Thunderstorm", ignoreCase = true) -> "Thunderstorm"
-                                rawMain.equals("Mist", true) || rawMain.equals("Fog", true) || rawMain.equals("Haze", true) -> "Fog"
-                                rawMain.equals("Wind", true) -> "Wind"
-                                rawMain.equals("Clouds", true) -> "Clouds"
-                                rawMain.equals("Clear", true) -> "Clear"
-                                else -> "Clouds"
-                            }
-                            val weatherEmoji = weatherToEmoji(adjustedMain)
-
-                            Text(hourText, style = MaterialTheme.typography.bodySmall, color = sheetTextColor)
-                            Spacer(Modifier.height(4.dp))
-                            Text(weatherEmoji, style = MaterialTheme.typography.headlineMedium)
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = String.format("%.1f°C", forecast.temp),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = sheetTextColor
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clipToBounds()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(Color.LightGray.copy(alpha = 0.1f))
-                    )
-
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp)
-                            .align(Alignment.Center)
-                    ) {
-                        val itemWidthPx = itemWidthDp.toPx()
-                        val itemSpacingPx = itemSpacingDp.toPx()
-                        val scrollOffsetPx = listState.firstVisibleItemScrollOffset.toFloat()
-                        val firstVisibleIndex = listState.firstVisibleItemIndex
-                        val graphHeight = size.height
-                        val paddingTop = 20f
-                        val paddingBottom = 10f
-
-                        val points = filteredHourly.mapIndexed { index, hourly ->
-                            val normalized = (hourly.temp.toFloat() - minTemp.toFloat()) / tempRange.toFloat()
-                            val x = index * (itemWidthPx + itemSpacingPx) + (itemWidthPx / 2) - scrollOffsetPx - firstVisibleIndex * (itemWidthPx + itemSpacingPx)
-                            val y = (graphHeight - paddingTop - paddingBottom) * (1f - normalized.coerceIn(0f, 1f)) + paddingTop
-                            Offset(x, y)
-                        }.filter { it.x in -itemWidthPx..size.width + itemWidthPx }
-
-                        for (i in 0 until points.size - 1) {
-                            drawLine(
-                                color = Color.Blue.copy(alpha = 0.7f),
-                                start = points[i],
-                                end = points[i + 1],
-                                strokeWidth = 4f
-                            )
-                        }
-
-                        points.forEach { point ->
-                            drawCircle(Color.Blue, radius = 8f, center = point)
-                        }
-                    }
-                }
-            }
-
-            item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(itemSpacingDp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    items(filteredHourly) { forecast ->
-                        Box(
-                            modifier = Modifier.width(itemWidthDp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "💧${(forecast.pop * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = sheetTextColor
-                                )
-                                if ((forecast.pop * 100).toInt() >= 30 && (forecast.rain?.get("1h") ?: 0.0) > 0.0) {
-                                    Text(
-                                        text = "🌧️${String.format("%.1f", forecast.rain?.get("1h") ?: 0.0)}mm",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = sheetTextColor
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                HourlyForecastGraphRow(
+                    hourlyData = filteredHourly,
+                    sheetTextColor = sheetTextColor,
+                    itemWidthDp = itemWidthDp,
+                    itemSpacingDp = itemSpacingDp
+                )
             }
         }
 
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-                Text(
-                    text = "📅 주간 날씨",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = sheetTextColor,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                data.daily?.take(7)?.forEachIndexed { index, day ->
-                    val dayOfWeek = Instant.ofEpochSecond(day.dt)
-                        .atZone(ZoneId.of("Asia/Seoul"))
-                        .dayOfWeek
-                        .toString()
-                        .substring(0, 3)
-
-                    val displayDay = if (index == 0) "오늘" else dayOfWeek
-                    val emoji = weatherToEmoji(day.weather.firstOrNull()?.main ?: "Clear")
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = displayDay,
-                            style = MaterialTheme.typography.bodyLarge.copy(color = sheetTextColor)
-                        )
-                        Text(
-                            text = emoji,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = "최고 ${String.format("%.1f", day.temp.max)}° / 최저 ${String.format("%.1f", day.temp.min)}°",
-                            style = MaterialTheme.typography.bodyLarge.copy(color = sheetTextColor)
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(24.dp))
+            WeeklyForecast(
+                dailyWeather = data.daily,
+                textColor = sheetTextColor
+            )
         }
+    }
+
+    // 위치 선택 모달
+    if (showLocationModal) {
+        LocationSelectionModal(
+            savedLocations = savedLocations,
+            onLocationSelect = { location ->
+                showLocationModal = false
+                onLocationSelect(location)
+            },
+            onAddLocation = onAddLocation,
+            onDeleteLocation = onDeleteLocation, // 👈 삭제 파라미터 전달
+            onDismiss = { showLocationModal = false },
+            onSearchLocation = onSearchLocation
+        )
     }
 }

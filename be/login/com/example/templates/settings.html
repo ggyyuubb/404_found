@@ -18,6 +18,14 @@
         푸시 알림 받기
     </label><br /><br />
 
+    <form id="profileImageForm" enctype="multipart/form-data" style="margin-bottom:16px;">
+        <label>프로필 사진 변경:</label>
+        <input type="file" id="profileImage" accept="image/*"><br>
+        <button type="submit">사진 업로드</button>
+    </form>
+    <img id="currentProfileImage" src="" alt="프로필 사진" style="max-width:120px;display:none;">
+    <div id="profileImageResult"></div>
+
     <button id="saveBtn">저장하기</button>
     <div id="msg" style="margin-top: 20px;"></div>
 
@@ -46,6 +54,10 @@
             const data = await res.json();
             document.getElementById('nickname').value = data.nickname || '';
             document.getElementById('pushToggle').checked = data.push_notifications_enabled || false;
+            if (data.profile_image) {
+                document.getElementById('currentProfileImage').src = data.profile_image;
+                document.getElementById('currentProfileImage').style.display = '';
+            }
         }
 
         async function saveSettings() {
@@ -89,6 +101,30 @@
         }
 
         document.getElementById('saveBtn').addEventListener('click', saveSettings);
+
+        document.getElementById('profileImageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('profileImage');
+            if (!fileInput.files.length) return alert('이미지를 선택하세요.');
+            const jwt = localStorage.getItem('jwt');
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            const res = await fetch('/user/profile_image', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt },
+                body: formData
+            });
+            const result = await res.json();
+            const resultDiv = document.getElementById('profileImageResult');
+            if (res.ok) {
+                resultDiv.innerHTML = `<p>${result.message}</p>`;
+                document.getElementById('currentProfileImage').src = result.url;
+                document.getElementById('currentProfileImage').style.display = '';
+            } else {
+                resultDiv.innerHTML = `<p style="color:red;">${result.message}</p>`;
+            }
+        });
+
         window.onload = loadSettings;
     </script>
 </body>

@@ -150,4 +150,32 @@ def delete_image(image_id):
     doc_ref.delete()
     return jsonify({'message': '삭제 성공!'})
 
+# 📌 [6] 이미지 정보(카테고리/타입) 수정
+@image_bp.route('/edit_image/<image_id>', methods=['PUT'])
+@jwt_required()
+def edit_image(image_id):
+    db = get_db()
+    uid = get_jwt_identity()
+    user_doc = db.collection('users').document(uid).get()
+    if not user_doc.exists:
+        return jsonify({'error': '유효하지 않은 사용자'}), 403
+
+    doc_ref = db.collection('users').document(uid).collection('closet').document(image_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        return jsonify({'error': '이미지가 존재하지 않습니다.'}), 404
+
+    data = request.get_json()
+    update_fields = {}
+    if 'category' in data:
+        update_fields['category'] = data['category']
+    if 'type' in data:
+        update_fields['type'] = data['type']
+
+    if not update_fields:
+        return jsonify({'error': '수정할 값이 없습니다.'}), 400
+
+    doc_ref.update(update_fields)
+    return jsonify({'message': '수정 성공!', 'updated': update_fields}), 200
+
 

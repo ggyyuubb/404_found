@@ -1,6 +1,6 @@
 // 📁 network/WeatherApiService.kt
 // ✅ OpenWeatherMap의 One Call API 3.0 버전을 사용해 날씨 데이터를 요청하는 Retrofit 인터페이스입니다.
-// ✅ 이 API는 시간별 예보(hourly), 현재 날씨(current) 등을 포함하며, 불필요한 항목(minutely, daily, alerts)은 제외합니다.
+// ✅ 이 API는 현재 날씨(current), 시간별 예보(hourly), 주간 예보(daily)를 포함하며, 불필요한 항목(minutely, alerts)만 제외합니다.
 
 package com.example.wearther.home.weather
 
@@ -20,7 +20,7 @@ interface WeatherApiService {
      * @param lon 경도
      * @param apiKey OpenWeatherMap에서 발급받은 개인 API 키 (기본값 설정됨)
      * @param units 온도 단위: "metric"은 섭씨
-     * @param exclude 제외할 항목: "minutely", "daily", "alerts"
+     * @param exclude 제외할 항목: "minutely", "alerts" (daily는 포함하여 주간 예보 데이터 수신)
      *
      * @return 날씨 정보를 담은 HTTP Response<WeatherResponse>
      */
@@ -30,6 +30,6 @@ interface WeatherApiService {
         @Query("lon") lon: Double, // ✅ 경도
         @Query("appid") apiKey: String = "9f77037105f413b870f9c9f2c1a2fb32", // ✅ API 키 (기본값)
         @Query("units") units: String = "metric", // ✅ 섭씨 기준
-        @Query("exclude") exclude: String = "minutely,daily,alerts" // ✅ 불필요한 데이터 제외
+        @Query("exclude") exclude: String = "minutely,alerts" // ✅ daily 제외하지 않음 → 주간 예보 포함!
     ): Response<WeatherResponse>
 }
