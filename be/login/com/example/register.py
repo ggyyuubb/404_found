@@ -13,7 +13,10 @@ def register():
         return render_template('register.html')
 
     data = request.get_json()
-    email, password, username = data.get('email'), data.get('password'), data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    username = data.get('username')
+    age_group = data.get('age_group', '20')  # 기본값 20대
 
     if not email or not password:
         return jsonify({"message": "이메일과 비밀번호를 입력해주세요."}), 400
@@ -38,6 +41,7 @@ def register():
             'password': hashed_pw.decode(),
             'nickname': username,
             'user_id': user_id,
+            'age_group': age_group,
             'created_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
         })
 

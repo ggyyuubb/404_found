@@ -68,8 +68,12 @@
     let maxCloset = 4;
     let maxImage = 4;
 
+    function getJwt() {
+      return localStorage.getItem('jwt');
+    }
+
     async function fetchMyUid() {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       if (!jwt) return null;
       try {
         const res = await fetch('/auth/verify_token', {
@@ -84,7 +88,7 @@
     }
 
     async function fetchClosetAndReco() {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       if (!jwt) return;
 
       const closetRes = await fetch('/upload/my_closet', {
@@ -200,13 +204,19 @@
     });
 
     async function fetchComments(postId) {
-      const res = await fetch(`/community/posts/${postId}/comments`);
+      const jwt = getJwt();
+      const res = await fetch(`/community/posts/${postId}/comments`, {
+        headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+      });
       const comments = await res.json();
       return comments;
     }
 
     async function fetchReplies(postId, commentId) {
-      const res = await fetch(`/community/posts/${postId}/comments/${commentId}/replies`);
+      const jwt = getJwt();
+      const res = await fetch(`/community/posts/${postId}/comments/${commentId}/replies`, {
+        headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+      });
       const replies = await res.json();
       return replies;
     }
@@ -224,7 +234,7 @@
 
     async function submitReply(e, postId, commentId) {
       e.preventDefault();
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       const content = e.target.replyContent.value.trim();
       if (!jwt) return alert('로그인 필요');
       if (!content) return alert('대댓글 내용을 입력하세요.');
@@ -267,7 +277,7 @@
 
     async function submitComment(e, postId) {
       e.preventDefault();
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       const content = e.target.commentContent.value.trim();
       if (!jwt) return alert('로그인 필요');
       if (!content) return alert('댓글 내용을 입력하세요.');
@@ -314,7 +324,7 @@
     }
 
     async function toggleLike(postId) {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       if (!jwt) return alert('로그인 필요');
       const res = await fetch(`/community/posts/${postId}/like`, {
         method: 'POST',
@@ -327,14 +337,12 @@
       }
     }
 
-    // 프로필 페이지로 JWT 포함해서 이동하는 함수
     async function goToProfile(userId) {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       if (!jwt) {
         window.location.href = `/community/profile/${userId}`;
         return;
       }
-      // fetch로 JWT 포함해서 요청, 기존 창에서 렌더링
       const res = await fetch(`/community/profile/${userId}`, {
         headers: { 'Authorization': 'Bearer ' + jwt }
       });
@@ -349,8 +357,11 @@
     }
 
     async function fetchPosts() {
+      const jwt = getJwt();
       if (!myUid) myUid = await fetchMyUid();
-      const res = await fetch('/community/posts');
+      const res = await fetch('/community/posts', {
+        headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+      });
       const posts = await res.json();
       document.getElementById('posts').innerHTML = posts.map(p => {
         let btns = '';
@@ -370,7 +381,6 @@
           }
           recoHtml = `<div>첨부 추천코디:<br>${renderRecommended(reco)}</div>`;
         }
-        // 프로필 이미지 처리 (없으면 SVG 아이콘)
         let profileImgHtml = '';
         if (p.profile_image) {
           profileImgHtml = `<span onclick="goToProfile('${p.user_id}')" style="cursor:pointer;">
@@ -434,8 +444,8 @@
     }
 
     async function deletePost(postId) {
+      const jwt = getJwt();
       if (!confirm('정말 삭제하시겠습니까?')) return;
-      const jwt = localStorage.getItem('jwt');
       const res = await fetch(`/community/posts/${postId}`, {
         method: 'DELETE',
         headers: { 'Authorization': 'Bearer ' + jwt }
@@ -454,7 +464,7 @@
     }
 
     async function editPost(postId, content) {
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       const res = await fetch(`/community/posts/${postId}`, {
         method: 'PUT',
         headers: {
@@ -473,7 +483,7 @@
 
     document.getElementById('postForm').onsubmit = async e => {
       e.preventDefault();
-      const jwt = localStorage.getItem('jwt');
+      const jwt = getJwt();
       const content = document.getElementById('content').value;
       const imageInput = document.getElementById('image');
       const recoIdx = document.getElementById('selectedRecoIdx').value;
