@@ -10,13 +10,15 @@
     <b>닉네임:</b> {{ user.nickname or user.user_id }}<br>
     <b>이메일:</b> {{ user.email }}<br>
     <b>가입일:</b> {{ created_at }}<br>
-    <!-- 친구추가 버튼: 본인 프로필에서는 숨김, 이미 친구면 메시지 -->
+    <!-- 친구추가/삭제 버튼: 본인 프로필에서는 숨김, 이미 친구면 삭제 가능 -->
     {% if current_user_id and user.user_id != current_user_id %}
       {% if not is_friend %}
         <button id="addFriendBtn" onclick="addFriend()">친구추가</button>
         <span id="friendStatus"></span>
       {% else %}
         <span style="color:green;">이미 친구입니다.</span>
+        <button id="deleteFriendBtn" onclick="deleteFriend()">친구삭제</button>
+        <span id="deleteFriendStatus"></span>
       {% endif %}
     {% endif %}
   </div>
@@ -53,8 +55,30 @@
       if (res.ok) {
         document.getElementById('friendStatus').textContent = '친구 추가 완료!';
         document.getElementById('addFriendBtn').disabled = true;
+        location.reload();
       } else {
         document.getElementById('friendStatus').textContent = '이미 친구이거나 오류!';
+      }
+    }
+
+    async function deleteFriend() {
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        alert('로그인 필요');
+        return;
+      }
+      const userId = "{{ user.user_id }}";
+      if (!confirm('정말 친구를 삭제하시겠습니까?')) return;
+      const res = await fetch(`/community/delete_friend/${userId}`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + jwt }
+      });
+      if (res.ok) {
+        document.getElementById('deleteFriendStatus').textContent = '친구 삭제 완료!';
+        document.getElementById('deleteFriendBtn').disabled = true;
+        location.reload();
+      } else {
+        document.getElementById('deleteFriendStatus').textContent = '삭제 실패!';
       }
     }
   </script>

@@ -13,6 +13,18 @@
         <input type="password" id="password" required><br>
         <label>닉네임:</label>
         <input type="text" id="username" required placeholder="한글 입력 가능"><br>
+        <label>나이대:</label>
+        <select id="age_group" required>
+            <option value="10">10대</option>
+            <option value="20" selected>20대</option>
+            <option value="30">30대</option>
+            <option value="40">40대</option>
+            <option value="50">50대</option>
+            <option value="60">60대</option>
+            <option value="70">70대</option>
+            <option value="80">80대</option>
+            <option value="90">90대</option>
+        </select><br>
         <button type="submit">가입하기</button>
     </form>
     <div id="result" style="margin-top: 20px;"></div>
@@ -22,11 +34,12 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const username = document.getElementById('username').value;
+            const age_group = document.getElementById('age_group').value;
 
             const response = await fetch('/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email, password, username})
+                body: JSON.stringify({email, password, username, age_group})
             });
 
             const result = await response.json();

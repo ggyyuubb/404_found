@@ -176,10 +176,20 @@ def get_posts():
     posts_ref = db.collection('community_posts').order_by('created_at', direction=firestore.Query.DESCENDING)
     all_posts = []
     uid = None
+    user_age_group = None
     try:
         uid = get_jwt_identity()
     except Exception:
         pass
+
+    # 현재 사용자 나이대 가져오기
+    if uid:
+        user_doc = db.collection('users').document(uid).get()
+        if user_doc.exists:
+            user_age_group = user_doc.to_dict().get('age_group')
+
+    print("현재 로그인 uid:", uid)
+    print("현재 사용자 나이대:", user_age_group)
 
     # 전체 게시물 가져오기
     for doc in posts_ref.stream():
@@ -192,8 +202,10 @@ def get_posts():
         if user_doc.exists:
             user_data = user_doc.to_dict()
             post['profile_image'] = user_data.get('profile_image') or None
+            post['age_group'] = user_data.get('age_group')
         else:
             post['profile_image'] = None
+            post['age_group'] = None
         created_at = post.get('created_at')
         if hasattr(created_at, 'timestamp'):
             post['_ts'] = created_at.timestamp()
@@ -206,11 +218,12 @@ def get_posts():
             post['_ts'] = 0
         all_posts.append(post)
 
-    # 친구 목록 가져오기 (user_id 기준)
+    # 친구 목록 가져오기 (user_id 기준, None 제거)
     friend_ids = set()
     if uid:
         friends_ref = db.collection('users').document(uid).collection('friends')
-        friend_ids = {f.to_dict().get('user_id') for f in friends_ref.stream()}
+        friend_ids = {f.to_dict().get('user_id') for f in friends_ref.stream() if f.to_dict().get('user_id')}
+    print("친구 목록 friend_ids:", friend_ids)
 
     # 본인+친구 게시물과 나머지 게시물 분리
     priority_posts = []
@@ -221,12 +234,25 @@ def get_posts():
         else:
             other_posts.append(post)
 
+    # 나머지 게시물 중 사용자와 나이대가 같은 것과 아닌 것 분리
+    same_age_posts = []
+    diff_age_posts = []
+    if user_age_group:
+        for post in other_posts:
+            if post.get('age_group') == user_age_group:
+                same_age_posts.append(post)
+            else:
+                diff_age_posts.append(post)
+    else:
+        diff_age_posts = other_posts
+
     # 각각 최신순 정렬
     priority_posts.sort(key=lambda p: -p.get('_ts', 0))
-    other_posts.sort(key=lambda p: -p.get('_ts', 0))
+    same_age_posts.sort(key=lambda p: -p.get('_ts', 0))
+    diff_age_posts.sort(key=lambda p: -p.get('_ts', 0))
 
-    # 합쳐서 반환
-    result_posts = priority_posts + other_posts
+    # 합쳐서 반환: 본인+친구 → 나이대 같은 나머지 → 나머지
+    result_posts = priority_posts + same_age_posts + diff_age_posts
     return jsonify(result_posts), 200
 
 @community_bp.route('/community/profile/<user_id>', methods=['GET'])
@@ -290,3 +316,16 @@ def add_friend(friend_id):
         'added_at': datetime.utcnow()
     })
     return jsonify({'message': '친구 추가 완료'}), 200
+
+@community_bp.route('/community/delete_friend/<friend_id>', methods=['POST'])
+@jwt_required()
+def delete_friend(friend_id):
+    uid = get_jwt_identity()
+    if uid == friend_id:
+        return jsonify({'error': '본인은 친구삭제 불가'}), 400
+    db = firestore.client()
+    friend_ref = db.collection('users').document(uid).collection('friends').document(friend_id)
+    if not friend_ref.get().exists:
+        return jsonify({'error': '친구가 아닙니다.'}), 400
+    friend_ref.delete()
+    return jsonify({'message': '친구 삭제 완료'}), 200

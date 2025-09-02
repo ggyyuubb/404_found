@@ -25,7 +25,8 @@ def get_settings():
     return jsonify({
         "push_notifications_enabled": user.get('push_notifications_enabled', False),
         "nickname": user.get('nickname', ''),
-        "profile_image": user.get('profile_image', '')
+        "profile_image": user.get('profile_image', ''),
+        "age_group": user.get('age_group', '20')
     }), 200
 
 @user_edit_bp.route('/user/settings', methods=['PUT'])
@@ -35,7 +36,7 @@ def update_settings():
     uid = get_jwt_identity()
     data = request.get_json()
 
-    if not any(data.get(k) is not None for k in ['push_notifications_enabled', 'nickname', 'password']):
+    if not any(data.get(k) is not None for k in ['push_notifications_enabled', 'nickname', 'password', 'age_group']):
         return jsonify({"message": "수정할 값이 없습니다."}), 400
 
     user_ref = db.collection('users').document(uid)
@@ -51,6 +52,8 @@ def update_settings():
     if data.get('password'):
         hashed_pw = bcrypt.hashpw(data['password'].encode(), bcrypt.gensalt())
         updates['password'] = hashed_pw.decode()
+    if data.get('age_group'):
+        updates['age_group'] = data['age_group']
 
     user_ref.update(updates)
     return jsonify({"message": "설정이 성공적으로 업데이트되었습니다."}), 200

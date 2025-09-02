@@ -18,6 +18,19 @@
         푸시 알림 받기
     </label><br /><br />
 
+    <label>나이대:</label>
+    <select id="age_group">
+        <option value="10">10대</option>
+        <option value="20">20대</option>
+        <option value="30">30대</option>
+        <option value="40">40대</option>
+        <option value="50">50대</option>
+        <option value="60">60대</option>
+        <option value="70">70대</option>
+        <option value="80">80대</option>
+        <option value="90">90대</option>
+    </select><br /><br />
+
     <form id="profileImageForm" enctype="multipart/form-data" style="margin-bottom:16px;">
         <label>프로필 사진 변경:</label>
         <input type="file" id="profileImage" accept="image/*"><br>
@@ -58,6 +71,9 @@
                 document.getElementById('currentProfileImage').src = data.profile_image;
                 document.getElementById('currentProfileImage').style.display = '';
             }
+            if (data.age_group) {
+                document.getElementById('age_group').value = data.age_group;
+            }
         }
 
         async function saveSettings() {
@@ -71,9 +87,11 @@
             const nickname = document.getElementById('nickname').value.trim();
             const password = document.getElementById('password').value.trim();
             const pushEnabled = document.getElementById('pushToggle').checked;
+            const age_group = document.getElementById('age_group').value;
 
             const payload = {
-                push_notifications_enabled: pushEnabled
+                push_notifications_enabled: pushEnabled,
+                age_group: age_group
             };
             if (nickname) payload.nickname = nickname;
             if (password) payload.password = password;
