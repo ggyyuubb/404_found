@@ -329,3 +329,21 @@ def delete_friend(friend_id):
         return jsonify({'error': '친구가 아닙니다.'}), 400
     friend_ref.delete()
     return jsonify({'message': '친구 삭제 완료'}), 200
+
+@community_bp.route('/community/posts/<post_id>/share', methods=['POST'])
+@jwt_required()
+def share_post(post_id):
+    uid = get_jwt_identity()
+    db = firestore.client()
+    post_ref = db.collection('community_posts').document(post_id)
+    post_doc = post_ref.get()
+    if not post_doc.exists:
+        return jsonify({'error': '글이 존재하지 않습니다.'}), 404
+
+    post = post_doc.to_dict()
+    share_count = post.get('share_count', 0) + 1
+    shared_by = post.get('shared_by', [])
+    if uid not in shared_by:
+        shared_by.append(uid)
+    post_ref.update({'share_count': share_count, 'shared_by': shared_by})
+    return jsonify({'message': '공유 완료', 'share_count': share_count}), 200

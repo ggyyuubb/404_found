@@ -19,6 +19,7 @@ def recommendation_page():
 @jwt_required()
 def ai_recommend():
     uid = get_jwt_identity()  # Firebase UID
+    # 프론트에서 받은 위치정보(city)를 사용, 없으면 "Seoul" 기본값
     city = request.get_json().get("city", "Seoul")
 
     db = firestore.client()
@@ -29,13 +30,14 @@ def ai_recommend():
     print(f"[AI 추천 요청] 실제 user_id(Firebase UID): {uid}, city: {city}")
 
     try:
+        # 모델 API에 사용자 UID와 위치정보(city) 전달
         res = requests.post(
             "https://wearther-api-932275548518.asia-northeast3.run.app/recommend",
-            json={"user_id": uid, "city": city}  # 반드시 Firebase UID로!
+            json={"user_id": uid, "city": city}
         )
         res.raise_for_status()
         ai_result = res.json()
-         # temp를 정수로 변환
+        # temp를 정수로 변환
         if "temp" in ai_result:
             ai_result["temp"] = int(round(ai_result["temp"]))
         print("✅ AI 응답 원문:", ai_result)
@@ -61,40 +63,3 @@ def ai_recommend():
     except requests.exceptions.RequestException as e:
         print("Error occurred while fetching recommendation:", e)
         return jsonify({"error": str(e)}), 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

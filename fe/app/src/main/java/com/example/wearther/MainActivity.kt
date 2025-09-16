@@ -5,7 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,7 +15,7 @@ import com.example.wearther.setting.auth.GoogleSignInHelper
 import com.example.wearther.navigation.NavGraph
 import com.example.wearther.theme.WeartherTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     lateinit var googleSignInLauncher: ActivityResultLauncher<Intent>
 

@@ -68,7 +68,6 @@ fun HomeBottomSheetContent(
     }
 
     val response by viewModel.response.collectAsState()
-
     var isLoading by remember { mutableStateOf(false) }
 
     // ✅ 로딩 중이면 로딩 UI
@@ -84,6 +83,7 @@ fun HomeBottomSheetContent(
         return
     }
 
+    // response가 null인 경우 처리 (중복 제거)
     if (response == null) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -94,25 +94,27 @@ fun HomeBottomSheetContent(
         return
     }
 
-    if (response == null) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "추천 데이터를 불러오는 중입니다.",
-                color = Color.Gray,
-                fontSize = 16.sp
-            )
-        }
-        return
+    // 안전하게 추천 데이터 가져오기
+    val top = try {
+        response?.getTop()
+    } catch (e: Exception) {
+        Log.e("HomeBottomSheet", "getTop() failed: ${e.message}", e)
+        null
     }
 
-    val top = response?.getTop()
-    val bottom = response?.getBottom()
-    val outer = response?.getOuter()
+    val bottom = try {
+        response?.getBottom()
+    } catch (e: Exception) {
+        Log.e("HomeBottomSheet", "getBottom() failed: ${e.message}", e)
+        null
+    }
+
+    val outer = try {
+        response?.getOuter()
+    } catch (e: Exception) {
+        Log.e("HomeBottomSheet", "getOuter() failed: ${e.message}", e)
+        null
+    }
 
     val items = listOfNotNull(outer, top, bottom)
         .filter { !it.url.isNullOrBlank() }
@@ -161,21 +163,42 @@ fun HomeBottomSheetContent(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-
-
         Text(
-                text = "오늘의 추천 코디는...",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = textColor
-            )
+            text = "오늘의 추천 코디는...",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
 
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-            if (items.isEmpty()) {
-                Text(text = "추천된 코디가 없습니다.", color = Color.Gray)
+        if (items.isEmpty()) {
+            // 추천 데이터가 없을 때 더 친화적인 메시지
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "추천 코디를 준비 중입니다",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "잠시 후 다시 확인해주세요",
+                        color = Color.Gray,
+                        fontSize = 14.sp
+                    )
+                }
             }
-
+        } else {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -199,7 +222,7 @@ fun HomeBottomSheetContent(
                                 .padding(6.dp)
                         ) {
                             Text(
-                                text = item.category ?: "",
+                                text = item.category ?: "의류",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.align(Alignment.Center)
@@ -208,10 +231,23 @@ fun HomeBottomSheetContent(
                     }
                 }
             }
+        }
 
-            if (!errorMessage.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(text = errorMessage.orEmpty(), color = Color.Red, fontSize = 14.sp)
+        // 에러 메시지 표시
+        if (!errorMessage.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = errorMessage.orEmpty(),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(12.dp)
+                )
             }
         }
     }
+}
