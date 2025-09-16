@@ -29,6 +29,12 @@ object GoogleSignInHelper {
 
     // Google 로그인 요청을 시작하는 함수
     fun signIn(activity: Activity) {
+        // launcher가 초기화되었는지 확인
+        if (!::launcher.isInitialized) {
+            Log.e("GoogleSignInHelper", "❌ Launcher가 초기화되지 않았습니다. setLauncher()를 먼저 호출하세요.")
+            return
+        }
+
         // 로그인 옵션 설정: ID 토큰과 이메일 요청
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken("932275548518-a9hddce94fnvo4g17n79b1emfm0c7ft0.apps.googleusercontent.com") // Firebase 웹 클라이언트 ID
