@@ -19,7 +19,7 @@ object RecommendationService {
 
     // ✅ Retrofit 객체 생성
     private val retrofit = Retrofit.Builder()
-        .baseUrl("${BASE_URL}api/") // API의 실제 엔드포인트 접두 경로: ex) http://xxx/api/
+        .baseUrl(BASE_URL) // API의 실제 엔드포인트 접두 경로: ex) http://xxx/api/
         .addConverterFactory(GsonConverterFactory.create()) // JSON 변환기 설정 (Gson 사용)
         .client(okHttpClient) // 위에서 설정한 OkHttp 클라이언트 적용
         .build()

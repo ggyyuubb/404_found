@@ -1,7 +1,3 @@
-// 📁 ui/screens/HomeScreen.kt
-// ✅ 앱의 메인 화면. 현재 위치를 기반으로 날씨 정보를 불러오고, 바텀시트에는 추천 코디를 표시하는 화면입니다.
-// ✅ 위치 권한이 필요하며, 날씨와 추천 데이터를 ViewModel을 통해 가져옵니다.
-
 package com.example.wearther.home.weather
 
 import android.content.Context
@@ -34,7 +30,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val isDarkTheme = isSystemInDarkTheme()
 
-    // ✅ WeatherViewModel을 Context와 함께 생성
+    // ✅ WeatherViewModel 생성
     val weatherViewModel: WeatherViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -44,23 +40,17 @@ fun HomeScreen(
         }
     )
 
-    // ✅ 테마에 따른 바텀시트 색상 설정
     val sheetBackgroundColor = if (isDarkTheme) Color(0xFF333333) else Color(0xFFF0F0F0)
     val sheetTextColor = if (isDarkTheme) Color.White else Color.Black
 
-    // ✅ 날씨 상태 및 위치 텍스트 관찰
     val weather by weatherViewModel.weatherData.collectAsState()
     val locationText by weatherViewModel.locationText.collectAsState()
     val savedLocations by weatherViewModel.savedLocations.collectAsState()
 
-    // ✅ 스낵바 상태 및 코루틴 스코프 정의
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-
-    // ✅ 현재 위치 권한 여부 확인
     val locationGranted = hasLocationPermission(context)
 
-    // ✅ 권한이 없는 경우 안내 메시지를 표시
     if (!locationGranted) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -69,19 +59,16 @@ fun HomeScreen(
         ) {
             Text("위치 권한이 필요합니다.", color = Color.Red)
         }
-        return // 컴포저블 실행 중단
+        return
     }
 
-    // ✅ 권한이 허용된 경우 날씨와 추천 데이터를 최초 1회 불러오기
+    // 최초 실행 시
     LaunchedEffect(locationGranted) {
         if (locationGranted) {
-            // 처음 실행 시 현재 위치 날씨 가져오기
             weatherViewModel.fetchCurrentLocationWeather()
-
             val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
             val jwt = sharedPreferences.getString("jwt", null)
 
-            // ✅ 추천 요청 - 도시명은 주소에서 추출
             if (!jwt.isNullOrEmpty()) {
                 val city = locationText.split(" ").firstOrNull() ?: "Seoul"
                 Log.d("JWT_HOME", "✅ JWT: $jwt, 📍도시: $city")
@@ -92,23 +79,20 @@ fun HomeScreen(
         }
     }
 
-    // ✅ 바텀시트 상태 정의 (숨김 금지)
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
-        skipHiddenState = false // 숨김 가능하지만 아래에서 차단
+        skipHiddenState = false
     )
 
-    // ✅ 바텀시트가 숨겨졌을 경우 다시 일부 확장
     LaunchedEffect(bottomSheetState.currentValue) {
         if (bottomSheetState.currentValue == SheetValue.Hidden) {
             bottomSheetState.partialExpand()
         }
     }
 
-    // ✅ 바텀시트가 포함된 전체 화면 구조
     BottomSheetScaffold(
         scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState),
-        sheetPeekHeight = 80.dp, // 바텀시트 기본 손잡이 높이
+        sheetPeekHeight = 80.dp,
         sheetContent = {
             HomeBottomSheetContent(
                 textColor = sheetTextColor,
@@ -119,75 +103,81 @@ fun HomeScreen(
         sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
-        ) {
-            // ✅ 상단 리프레시 버튼 및 날짜
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 🔹 배경 먼저 그리기
+            WeatherBackground(
+                weatherMain = weather?.current?.weather?.firstOrNull()?.main,
+                isDarkTheme = isDarkTheme
+            )
+
+            // 🔹 실제 내용
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp)
             ) {
-                IconButton(onClick = {
-                    coroutineScope.launch {
-                        weatherViewModel.clearWeather()
-                        getCurrentLocation(context)?.let { location ->
-                            weatherViewModel.fetchWeather(location.latitude, location.longitude)
-                            weatherViewModel.fetchAddress(context, location.latitude, location.longitude)
-                            snackbarHostState.showSnackbar("새로고침 되었습니다")
-                        }
-                    }
-                }) {
-                    Icon(Icons.Default.Refresh, contentDescription = "새로고침")
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // ✅ 오늘 날짜 표시
-                Text(
-                    text = java.time.LocalDate.now().format(
-                        java.time.format.DateTimeFormatter.ofPattern("yyyy년 M월 d일")
-                    ),
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-
-            // ✅ 날씨 정보 표시 (위치 선택 기능 포함)
-            weather?.let {
-                WeatherContent(
-                    data = it,
-                    locationText = locationText,
-                    sheetTextColor = sheetTextColor,
-                    savedLocations = savedLocations, // ViewModel에서 가져온 저장된 위치들
-                    onLocationSelect = { location ->
-                        // 위치 선택 시 실행할 로직
-                        weatherViewModel.selectLocation(location)
-
-                        // 추천 데이터도 새 위치에 맞게 업데이트
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
                         coroutineScope.launch {
-                            val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
-                            val jwt = sharedPreferences.getString("jwt", null)
-                            if (!jwt.isNullOrEmpty()) {
-                                val city = location.name.split(",").firstOrNull()?.trim() ?: "Seoul"
-                                recommendationViewModel.fetchRecommendations(jwt, city)
+                            weatherViewModel.clearWeather()
+                            getCurrentLocation(context)?.let { location ->
+                                weatherViewModel.fetchWeather(location.latitude, location.longitude)
+                                weatherViewModel.fetchAddress(context, location.latitude, location.longitude)
+
+                                val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
+                                val jwt = sharedPreferences.getString("jwt", null)
+                                if (!jwt.isNullOrEmpty()) {
+                                    val city = locationText.split(" ").firstOrNull() ?: "Seoul"
+                                    recommendationViewModel.clearRecommendations()
+                                    recommendationViewModel.fetchRecommendations(jwt, city)
+                                }
+
+                                snackbarHostState.showSnackbar("새로고침 되었습니다")
                             }
                         }
-                    },
-                    onAddLocation = { newLocation ->
-                        weatherViewModel.addLocation(newLocation)
-                    },
-                    onDeleteLocation = { location -> // 👈 삭제 기능 추가!
-                        weatherViewModel.deleteLocation(location.id)
-                    },
-                    onSearchLocation = { query ->
-                        coroutineScope.async {
-                            weatherViewModel.searchLocations(query)
-                        }.await()
+                    }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "새로고침")
                     }
-                )
-            } ?: Text("날씨 정보를 불러오는 중입니다...", color = sheetTextColor)
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Text(
+                        text = java.time.LocalDate.now().format(
+                            java.time.format.DateTimeFormatter.ofPattern("yyyy년 M월 d일")
+                        ),
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                        color = sheetTextColor
+                    )
+                }
+
+                weather?.let {
+                    WeatherContent(
+                        data = it,
+                        locationText = locationText,
+                        sheetTextColor = sheetTextColor,
+                        savedLocations = savedLocations,
+                        onLocationSelect = { location ->
+                            weatherViewModel.selectLocation(location)
+                            coroutineScope.launch {
+                                val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
+                                val jwt = sharedPreferences.getString("jwt", null)
+                                if (!jwt.isNullOrEmpty()) {
+                                    val city = location.name.split(",").firstOrNull()?.trim() ?: "Seoul"
+                                    recommendationViewModel.clearRecommendations()
+                                    recommendationViewModel.fetchRecommendations(jwt, city)
+                                }
+                            }
+                        },
+                        onAddLocation = { newLocation -> weatherViewModel.addLocation(newLocation) },
+                        onDeleteLocation = { location -> weatherViewModel.deleteLocation(location.id) },
+                        onSearchLocation = { query -> coroutineScope.async { weatherViewModel.searchLocations(query) }.await() }
+                    )
+                } ?: Text("날씨 정보를 불러오는 중입니다...", color = sheetTextColor)
+            }
         }
     }
 }

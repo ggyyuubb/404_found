@@ -356,6 +356,26 @@
       }
     }
 
+    async function sharePost(postId) {
+      const jwt = getJwt();
+      if (!jwt) return alert('로그인 필요');
+      const res = await fetch(`/community/posts/${postId}/share`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + jwt }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          await navigator.clipboard.writeText(data.url);
+          alert(`공유 URL이 복사되었습니다!\n${data.url}`);
+        } else {
+          alert('공유 완료! (URL 없음)');
+        }
+      } else {
+        alert('공유 실패');
+      }
+    }
+
     async function fetchPosts() {
       const jwt = getJwt();
       if (!myUid) myUid = await fetchMyUid();
@@ -371,6 +391,9 @@
             <button onclick="deletePost('${p.id}')">삭제</button>
           `;
         }
+        let shareBtn = `
+          <button onclick="sharePost('${p.id}')">공유</button>
+        `;
         let imgHtml = renderImageUrls(p.image_urls);
         let closetHtml = renderClosetItem(p.closet_items);
         let recoHtml = '';
@@ -408,7 +431,7 @@
         return `<div style="border:1px solid #ccc;margin:8px;padding:8px;">
                   <b>${profileImgHtml}${nicknameHtml}</b> <small>${p.created_at && p.created_at.seconds ? new Date(p.created_at.seconds*1000).toLocaleString() : p.created_at || ''}</small><br>
                   <span id="content-${p.id}">${p.content}</span>
-                  <br>${imgHtml}${closetHtml}${recoHtml}${likeBtn}${btns}
+                  <br>${imgHtml}${closetHtml}${recoHtml}${likeBtn}${btns}${shareBtn}
                   <div class="comment-box">
                     <form onsubmit="submitComment(event, '${p.id}')">
                       <input type="text" name="commentContent" placeholder="댓글 작성" style="width:60%;">
@@ -545,6 +568,7 @@
     window.submitReply = submitReply;
     window.toggleLike = toggleLike;
     window.goToProfile = goToProfile;
+    window.sharePost = sharePost;
 
     window.onload = async () => {
       myUid = await fetchMyUid();

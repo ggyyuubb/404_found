@@ -3,61 +3,109 @@ package com.example.wearther.home.recommendation
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.wearther.remote.BASE_URL
+import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import retrofit2.HttpException
-import java.io.IOException
-import com.google.gson.Gson
-import com.google.gson.JsonElement
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class RecommendationViewModel : ViewModel() {
 
+    private val _recommendations = MutableStateFlow<List<String>>(emptyList())
+    val recommendations: StateFlow<List<String>> = _recommendations
 
-    // 🔹 전체 응답 그대로 보관 (getTop/getBottom/getOuter 사용용)
+    private val _loading = MutableStateFlow(false)
+    val loading: StateFlow<Boolean> = _loading
+
+    private val _errorMessage = MutableStateFlow("")
+    val errorMessage: StateFlow<String> = _errorMessage.asStateFlow()
+
+    private val _temp = MutableStateFlow(0.0)
+    val temp: StateFlow<Double> = _temp.asStateFlow()
+
+    private val _weatherCode = MutableStateFlow(0)
+    val weatherCode: StateFlow<Int> = _weatherCode.asStateFlow()
+
     private val _response = MutableStateFlow<RecommendationResponse?>(null)
-    val response: StateFlow<RecommendationResponse?> = _response
+    val response: StateFlow<RecommendationResponse?> = _response.asStateFlow()
 
-    // 🔹 에러 메시지 상태
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage
+    val isLoading: StateFlow<Boolean> = _loading
 
-    // 🔹 현재 온도 / 날씨 코드
-    private val _temp = MutableStateFlow<Int?>(null)
-    val temp: StateFlow<Int?> = _temp
+    private val gson = Gson()
+    private val client = OkHttpClient()
 
-    private val _weatherCode = MutableStateFlow<Int?>(null)
-    val weatherCode: StateFlow<Int?> = _weatherCode
+    fun fetchRecommendations(jwt: String, city: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val safeCity = if (city.isBlank()) "Seoul" else city
+            Log.d("RecoVM", "🚀 fetchRecommendations 시작 - city=$safeCity, jwt=${jwt.take(10)}...")
 
-    // 🔸 추천 요청 함수
-    fun fetchRecommendations(token: String, city: String = "Seoul") {
-        viewModelScope.launch {
+            _loading.value = true
+            _errorMessage.value = ""
+
             try {
-                Log.d("RECOMMEND_REQUEST", "요청 시작: 도시 = $city / 토큰 = $token")
-                val result = RecommendationService.api.getRecommendation(
-                    "Bearer $token",
-                    RecommendationRequest(city = city)
-                )
+                // ✅ 요청 body
+                val requestBody = gson.toJson(mapOf("city" to safeCity))
+                    .toRequestBody("application/json".toMediaType())
 
-                _errorMessage.value = null
+                val request = Request.Builder()
+                    .url("${BASE_URL}api/recommend/recommendations/ai") // ✅ 수정
+                    .addHeader("Authorization", "Bearer $jwt")
+                    .post(requestBody)
+                    .build()
 
-                // 🔸 응답에서 온도, 날씨코드 저장
-                _temp.value = result.temp
-                _weatherCode.value = result.weather_code
+                Log.d("RecoVM", "🌍 요청 URL: ${request.url}")
+                Log.d("RecoVM", "🔑 요청 헤더: Authorization=Bearer ${jwt.take(10)}...")
+                Log.d("RecoVM", "📦 요청 Body: $safeCity")
 
-                // 🔸 전체 응답 저장 (HomeBottomSheet에서 getTop/Bottom/Outer 쓰기 위함)
-                _response.value = result
+                val response = client.newCall(request).execute()
 
-            } catch (e: HttpException) {
-                Log.e("RECOMMEND_RESPONSE", "❌ HTTP 예외 발생: ${e.message}")
-                _errorMessage.value = "서버와의 통신 오류"
-            } catch (e: IOException) {
-                Log.e("RECOMMEND_RESPONSE", "❌ 네트워크 오류 발생: ${e.message}")
-                _errorMessage.value = "네트워크 오류"
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    Log.d("RecoVM", "✅ 서버 응답: $body")
+
+                    val recommendationResponse =
+                        gson.fromJson(body, RecommendationResponse::class.java)
+
+                    _response.value = recommendationResponse
+                    _temp.value = recommendationResponse.temp.toDouble()
+                    _weatherCode.value = recommendationResponse.weather_code
+
+                    val outfits = mutableListOf<String>()
+                    recommendationResponse.getTop()?.url?.let { outfits.add(it) }
+                    recommendationResponse.getBottom()?.url?.let { outfits.add(it) }
+                    recommendationResponse.getOuter()?.url?.let { outfits.add(it) }
+                    _recommendations.value = outfits
+
+                    Log.d("RecoVM", "🎉 추천 파싱 완료")
+                } else {
+                    val errorBody = response.body?.string()
+                    val errorMsg = "API 응답 실패: code=${response.code}, body=$errorBody"
+                    _errorMessage.value = errorMsg
+                    Log.e("RecoVM", "❌ $errorMsg")
+                }
             } catch (e: Exception) {
-                Log.e("RECOMMEND_RESPONSE", "❌ 예외 발생: ${e.message}")
-                _errorMessage.value = "알 수 없는 오류"
+                val errorMsg = e.message ?: "알 수 없는 오류"
+                _errorMessage.value = errorMsg
+                Log.e("RecoVM", "❌ 추천 불러오기 실패: $errorMsg", e)
+            } finally {
+                _loading.value = false
+                Log.d("RecoVM", "🔚 fetchRecommendations 종료 - loading=false")
             }
         }
+    }
+
+    fun clearRecommendations() {
+        Log.d("RecoVM", "🗑️ 추천 데이터 초기화")
+        _recommendations.value = emptyList()
+        _response.value = null
+        _errorMessage.value = ""
+        _temp.value = 0.0
+        _weatherCode.value = 0
     }
 }
