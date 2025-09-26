@@ -1,101 +1,159 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>AI 추천 결과</title>
-    <style>
-        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
-        h1 { font-size: 2em; }
-        #recommendResult { margin-top: 20px; }
-        img { margin-top: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        .result-list { margin-top: 16px; }
-        .result-list li { margin-bottom: 12px; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>AI 추천 결과</title>
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+    h1 { font-size: 2em; }
+    #recommendResult { margin-top: 20px; }
+    img { margin-top: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .result-list { margin-top: 16px; }
+    .result-list li { margin-bottom: 12px; }
+    #commentBox { margin-top: 20px; }
+    textarea { width: 100%; height: 80px; padding: 8px; margin-bottom: 8px; }
+    #claudeBox { margin-top: 20px; padding: 12px; border: 1px solid #ccc; background: #fafafa; border-radius: 6px; }
+  </style>
 </head>
 <body>
-    <h1>AI 추천 결과</h1>
-    <button id="recommendBtn">AI 추천 받기</button>
-    <div id="recommendResult"></div>
-    <script>
-        document.getElementById('recommendBtn').addEventListener('click', async () => {
-            const resultDiv = document.getElementById('recommendResult');
-            resultDiv.innerHTML = '추천 결과 불러오는 중...';
+  <h1>AI 추천 결과</h1>
+  <button id="recommendBtn">AI 추천 받기</button>
+  <div id="recommendResult"></div>
 
-            const jwt = localStorage.getItem('jwt');
-            if (!jwt) {
-                resultDiv.innerHTML = '로그인이 필요합니다.';
-                return;
-            }
-            try {
-                const response = await fetch('/api/recommend/recommendations/ai', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + jwt,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ city: 'Seoul' })
-                });
+  <!-- 코멘트 입력 -->
+  <div id="commentBox" style="display:none;">
+    <h2>추천에 대한 코멘트</h2>
+    <textarea id="commentInput" placeholder="코멘트를 입력하세요..."></textarea>
+    <button id="sendCommentBtn">코멘트 보내기</button>
+    <div id="commentStatus"></div>
+  </div>
 
-                if (!response.ok) throw new Error('추천 API 호출 실패');
-                const data = await response.json();
+  <!-- Claude 응답 + 새 추천 -->
+  <div id="claudeBox" style="display:none;">
+    <h2>Claude 분석 결과</h2>
+    <pre id="claudeResponse" style="white-space: pre-wrap;"></pre>
 
-                const rec = data.recommended || {};
-                let html = '<ul class="result-list">';
-                // 상의
-                if ('top' in rec) {
-                    if (rec.top && typeof rec.top === 'object') {
-                        html += `<li>상의: ${rec.top.category || ''} (${rec.top.filename || ''})`;
-                        if (rec.top.url) html += `<br><img src="${rec.top.url}" width="150">`;
-                        html += `</li>`;
-                    } else {
-                        html += `<li>상의: ${rec.top}</li>`;
-                    }
-                }
-                // 하의
-                if ('bottom' in rec) {
-                    if (rec.bottom && typeof rec.bottom === 'object') {
-                        html += `<li>하의: ${rec.bottom.category || ''} (${rec.bottom.filename || ''})`;
-                        if (rec.bottom.url) html += `<br><img src="${rec.bottom.url}" width="150">`;
-                        html += `</li>`;
-                    } else {
-                        html += `<li>하의: ${rec.bottom}</li>`;
-                    }
-                }
-                // 아우터
-                if ('outer' in rec) {
-                    if (rec.outer && typeof rec.outer === 'object') {
-                        html += `<li>아우터: ${rec.outer.category || ''} (${rec.outer.filename || ''})`;
-                        if (rec.outer.url) html += `<br><img src="${rec.outer.url}" width="150">`;
-                        html += `</li>`;
-                    } else {
-                        html += `<li>아우터: ${rec.outer}</li>`;
-                    }
-                }
-                if (data.temp) html += `<li>기온: ${data.temp}℃</li>`;
-                if (data.weather_code !== undefined) html += `<li>날씨코드: ${data.weather_code}</li>`;
-                html += '</ul>';
-                resultDiv.innerHTML = html;
-            } catch (e) {
-                resultDiv.innerHTML = '오류: ' + e.message;
-            }
+    <h3>코멘트 반영한 새로운 코디 추천</h3>
+    <ul id="newRecommendList" class="result-list"></ul>
+  </div>
+
+  <script>
+    // 이미지 포함 추천 렌더링
+    function renderItem(item) {
+      if (!item) return '없음';
+      if (typeof item === 'string') return item;
+
+      const category = item.category || '';
+      const filename = item.filename ? ` (${item.filename})` : '';
+      const url = item.url;
+
+      let html = `${category}${filename}`;
+      if (url) {
+        html += `<br><img src="${url}" width="150" loading="lazy" referrerpolicy="no-referrer">`;
+      }
+      return html;
+    }
+
+    // ===== 1. 기본 추천 =====
+    document.getElementById('recommendBtn').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('recommendResult');
+      resultDiv.innerHTML = '추천 결과 불러오는 중...';
+      document.getElementById('commentBox').style.display = 'none';
+      document.getElementById('claudeBox').style.display = 'none';
+
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        resultDiv.innerHTML = '로그인이 필요합니다.';
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/recommend/recommendations/ai', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + jwt,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ city: 'Seoul' })
         });
-    </script>
+
+        if (!response.ok) throw new Error('추천 API 호출 실패');
+        const data = await response.json();
+
+        // 원래 추천 표시
+        const rec = data.recommended || {};
+        let html = '<h2>원래 추천</h2><ul class="result-list">';
+        if ('top' in rec)   html += `<li>상의: ${renderItem(rec.top)}</li>`;
+        if ('bottom' in rec)html += `<li>하의: ${renderItem(rec.bottom)}</li>`;
+        if ('outer' in rec) html += `<li>아우터: ${renderItem(rec.outer)}</li>`;
+        if (data.temp !== undefined && data.temp !== null) html += `<li>기온: ${data.temp}℃</li>`;
+        if (data.weather_code !== undefined) html += `<li>날씨코드: ${data.weather_code}</li>`;
+        html += '</ul>';
+        resultDiv.innerHTML = html;
+
+        document.getElementById('commentBox').style.display = 'block';
+      } catch (e) {
+        resultDiv.innerHTML = '오류: ' + e.message;
+      }
+    });
+
+    // ===== 2. 코멘트 전송 후 새 추천 =====
+    document.getElementById('sendCommentBtn').addEventListener('click', async () => {
+      const comment = document.getElementById('commentInput').value.trim();
+      const statusDiv = document.getElementById('commentStatus');
+      const claudeBox = document.getElementById('claudeBox');
+      const claudeResponseDiv = document.getElementById('claudeResponse');
+      const newRecommendList = document.getElementById('newRecommendList');
+
+      if (!comment) {
+        statusDiv.innerHTML = '코멘트를 입력하세요.';
+        return;
+      }
+
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        statusDiv.innerHTML = '로그인이 필요합니다.';
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/recommend/recommendations/ai', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + jwt,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ city: 'Seoul', comment })
+        });
+
+        if (!response.ok) throw new Error('코멘트 전송 실패');
+        const data = await response.json();
+
+        statusDiv.innerHTML = '✅ 코멘트가 성공적으로 전송되었습니다.';
+        document.getElementById('commentInput').value = '';
+
+        // Claude 분석 결과 JSON 그대로 보여주기
+        claudeResponseDiv.textContent = '';
+        if (data.replace_json) {
+          claudeResponseDiv.textContent = JSON.stringify(data.replace_json, null, 2);
+          claudeBox.style.display = 'block';
+        }
+
+        // 새 추천 표시 (추천 모델이 반환한 이미지 포함)
+        newRecommendList.innerHTML = '';
+        if (data.new_recommend && data.new_recommend.recommended) {
+          const nr = data.new_recommend.recommended;
+          if (nr.top)    newRecommendList.innerHTML += `<li>상의: ${renderItem(nr.top)}</li>`;
+          if (nr.bottom) newRecommendList.innerHTML += `<li>하의: ${renderItem(nr.bottom)}</li>`;
+          if (nr.outer)  newRecommendList.innerHTML += `<li>아우터: ${renderItem(nr.outer)}</li>`;
+          if (data.new_recommend.temp !== undefined) {
+            newRecommendList.innerHTML += `<li>기온: ${data.new_recommend.temp}℃</li>`;
+          }
+        }
+      } catch (e) {
+        statusDiv.innerHTML = '❌ 오류: ' + e.message;
+      }
+    });
+  </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

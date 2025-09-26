@@ -7,8 +7,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -16,11 +17,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// 정렬 옵션 enum
+enum class SortOption(val displayName: String) {
+    CATEGORY("카테고리순"),
+    NEWEST_FIRST("추가순 (최신순)"),
+    OLDEST_FIRST("추가순 (오래된순)"),
+    MANUAL("직접정렬순")
+}
+
 @Composable
 fun Header(
     totalItems: Int,
-    onSortChange: () -> Unit
+    currentSortOption: SortOption,
+    onSortChange: (SortOption) -> Unit
 ) {
+    var showDropdown by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -40,21 +52,50 @@ fun Header(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.clickable { onSortChange() },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "직접추천순",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "정렬 변경",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(16.dp)
-                )
+            // 정렬 드롭다운
+            Box {
+                Row(
+                    modifier = Modifier.clickable {
+                        showDropdown = !showDropdown
+                    },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = currentSortOption.displayName,
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Icon(
+                        imageVector = if (showDropdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = "정렬 변경",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // 드롭다운 메뉴
+                DropdownMenu(
+                    expanded = showDropdown,
+                    onDismissRequest = { showDropdown = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    SortOption.values().forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = option.displayName,
+                                    fontSize = 14.sp,
+                                    color = if (option == currentSortOption) Color.Black else Color.Gray,
+                                    fontWeight = if (option == currentSortOption) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                onSortChange(option)
+                                showDropdown = false
+                            }
+                        )
+                    }
+                }
             }
 
             IconButton(

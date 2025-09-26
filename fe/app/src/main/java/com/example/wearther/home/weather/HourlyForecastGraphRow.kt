@@ -1,16 +1,19 @@
 package com.example.wearther.home.weather
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -41,8 +44,6 @@ fun HourlyForecastGraphRow(
     val paddingBottom = 10f
 
     Column {
-
-
         // ⬇️ 시간별 예보 + 강수량 UI
         LazyRow(
             state = listState,
@@ -55,7 +56,7 @@ fun HourlyForecastGraphRow(
                 val forecastTime = Instant.ofEpochSecond(forecast.dt)
                     .atZone(ZoneId.of("Asia/Seoul"))
                 val hourText = "${forecastTime.hour}시"
-                val weatherMain = forecast.weather.firstOrNull()?.main ?: "Clouds"
+                val weatherMain = forecast.weather.firstOrNull()?.main ?: "Clear"
                 val weatherEmoji = weatherToEmoji(weatherMain)
 
                 Column(
@@ -79,64 +80,100 @@ fun HourlyForecastGraphRow(
                     )
 
                     Spacer(Modifier.height(8.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.height(48.dp)  // 고정 높이
+                    ) {
+                        // 비 올 확률
                         Text(
                             text = "💧${(forecast.pop * 100).toInt()}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = sheetTextColor
                         )
-                        if ((forecast.pop * 100).toInt() >= 30 && (forecast.rain?.oneHour
-                                ?: 0.0) > 0.0
-                        ) {
-                            Text(
-                                text = "🌧️${
-                                    String.format(
-                                        "%.1f",
-                                        forecast.rain?.oneHour ?: 0.0
-                                    )
-                                }mm",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = sheetTextColor
-                            )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // 강수량 (비/눈이고 실제 강수량이 있을 때만)
+                        val isRainyWeather = weatherMain.lowercase() in listOf("rain", "drizzle", "thunderstorm", "snow")
+                        if (isRainyWeather) {
+                            val currentRain = forecast.rain?.oneHour ?: 0.0
+
+                            if (currentRain > 0.0) {  // 현재 시간에 강수량이 실제로 있을 때만
+                                // 앞뒤 시간 강수량 추가로 더하기
+                                val prevRain = hourlyData.getOrNull(index - 1)?.rain?.oneHour ?: 0.0
+                                val nextRain = hourlyData.getOrNull(index + 1)?.rain?.oneHour ?: 0.0
+
+                                val totalRain = currentRain + prevRain + nextRain
+
+                                Text(
+                                    text = "🌧️${String.format("%.1f", totalRain)}mm",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = sheetTextColor
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+
         // ⬇️ 온도 그래프 선 그리기
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp) // 그래프 높이
-            ) {
-                val scrollOffsetPx = listState.firstVisibleItemScrollOffset.toFloat()
-                val firstVisibleIndex = listState.firstVisibleItemIndex
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                .padding(8.dp)
+        ) {
+            val scrollOffsetPx = listState.firstVisibleItemScrollOffset.toFloat()
+            val firstVisibleIndex = listState.firstVisibleItemIndex
 
-                val points = hourlyData.mapIndexed { index, forecast ->
-                    val normalized = (forecast.temp - minTemp) / tempRange
-                    val x = index * (itemWidthPx + itemSpacingPx) + (itemWidthPx / 2) -
-                            firstVisibleIndex * (itemWidthPx + itemSpacingPx) - scrollOffsetPx
-                    val y = (graphHeight - paddingTop - paddingBottom) *
-                            (1f - normalized.toFloat().coerceIn(0f, 1f)) + paddingTop
-                    Offset(x, y)
-                }.filter { it.x in -itemWidthPx..size.width + itemWidthPx }
+            val points = hourlyData.mapIndexed { index, forecast ->
+                val normalized = (forecast.temp - minTemp) / tempRange
+                val x = index * (itemWidthPx + itemSpacingPx) + (itemWidthPx / 2) -
+                        firstVisibleIndex * (itemWidthPx + itemSpacingPx) - scrollOffsetPx
+                val y = (graphHeight - paddingTop - paddingBottom) *
+                        (1f - normalized.toFloat().coerceIn(0f, 1f)) + paddingTop
+                Offset(x, y)
+            }.filter { it.x in -itemWidthPx..size.width + itemWidthPx }
 
-                for (i in 0 until points.size - 1) {
-                    drawLine(
-                        color = Color.Blue.copy(alpha = 0.8f),
-                        start = points[i],
-                        end = points[i + 1],
-                        strokeWidth = 4f
-                    )
-                }
-
-                points.forEach {
-                    drawCircle(
-                        color = Color.Blue,
-                        radius = 6f,
-                        center = it
-                    )
+            // 🔹 곡선 Path
+            val path = androidx.compose.ui.graphics.Path().apply {
+                if (points.isNotEmpty()) {
+                    moveTo(points.first().x, points.first().y)
+                    for (i in 1 until points.size) {
+                        val prev = points[i - 1]
+                        val curr = points[i]
+                        val midX = (prev.x + curr.x) / 2
+                        cubicTo(
+                            midX, prev.y,
+                            midX, curr.y,
+                            curr.x, curr.y
+                        )
+                    }
                 }
             }
+
+            // 🔹 라인: 하늘색 → 보라색
+            val gradient = Brush.horizontalGradient(
+                listOf(Color(0xFF64B5F6), Color(0xFFBA68C8))
+            )
+
+            drawPath(
+                path = path,
+                brush = gradient,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)
+            )
+
+            // 🔹 점: 기본 블루톤, 현재 시간은 민트 포인트
+            points.forEachIndexed { index, offset ->
+                val isNow = index == 0
+                drawCircle(
+                    color = if (isNow) Color(0xFF4DB6AC) else Color(0xFF90CAF9),
+                    radius = if (isNow) 9f else 6f,
+                    center = offset
+                )
+            }
         }
+    }
 }

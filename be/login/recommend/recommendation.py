@@ -4,6 +4,12 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 import requests
 from firebase_admin import firestore
 import datetime
+import json as pyjson
+from dotenv import load_dotenv
+
+# ✅ .env 로드
+load_dotenv()
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 recommendation_bp = Blueprint(
     'recommendation_bp',
@@ -15,12 +21,14 @@ recommendation_bp = Blueprint(
 def recommendation_page():
     return render_template('recommendation.html')
 
+
 @recommendation_bp.route('/recommendations/ai', methods=['POST'])
 @jwt_required()
 def ai_recommend():
     uid = get_jwt_identity()  # Firebase UID
-    # 프론트에서 받은 위치정보(city)를 사용, 없으면 "Seoul" 기본값
-    city = request.get_json().get("city", "Seoul")
+    data = request.get_json()
+    city = data.get("city", "Seoul")
+    comment = data.get("comment", "").strip() if "comment" in data else ""
 
     db = firestore.client()
     user_doc = db.collection('users').document(uid).get()
@@ -30,36 +38,137 @@ def ai_recommend():
     print(f"[AI 추천 요청] 실제 user_id(Firebase UID): {uid}, city: {city}")
 
     try:
-        # 모델 API에 사용자 UID와 위치정보(city) 전달
+        # ===== 1. 기본 추천 모델 호출 =====
         res = requests.post(
             "https://wearther-api-932275548518.asia-northeast3.run.app/recommend",
             json={"user_id": uid, "city": city}
         )
         res.raise_for_status()
         ai_result = res.json()
+
         # temp를 정수로 변환
         if "temp" in ai_result:
             ai_result["temp"] = int(round(ai_result["temp"]))
-        print("✅ AI 응답 원문:", ai_result)
+
+        print("✅ 기본 추천 결과:", ai_result)
 
         # recommended가 객체 형태인지 확인
         if not isinstance(ai_result.get("recommended"), dict):
             print("❌ recommended가 객체가 아님:", ai_result.get("recommended"))
             return jsonify({
                 "error": "AI 추천 결과가 유효하지 않습니다.",
-                "recommended": {
-                    "top": None,
-                    "bottom": None,
-                    "outer": None
-                },
+                "recommended": {"top": None, "bottom": None, "outer": None},
                 "temp": ai_result.get("temp", -1),
                 "weather_code": ai_result.get("weather_code", -1)
             }), 500
 
+        # ===== 2. Firestore에 기본 추천 저장 준비 =====
         now_str = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        db.collection('users').document(uid).collection('recommendation').document(now_str).set(ai_result)
+        save_data = {
+            "recommended": ai_result.get("recommended", {}),
+            "temp": ai_result.get("temp"),
+            "weather_code": ai_result.get("weather_code"),
+            "created_at": datetime.datetime.utcnow()
+        }
+
+        new_recommend = None
+        claude_json = None
+        replace_json = None
+
+        # ===== 3. 코멘트 있으면 Claude 호출 =====
+        if comment:
+            db.collection('users').document(uid).collection('recommendation_comments').add({
+                'recommendation_id': now_str,
+                'comment': comment,
+                'created_at': datetime.datetime.utcnow()
+            })
+
+            try:
+                # ✅ Claude API → 조건 추출
+                claude_res = requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": ANTHROPIC_API_KEY,  # 🔑 .env에서 불러옴
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "claude-3-5-sonnet-20240620",
+                        "max_tokens": 300,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": f"""
+사용자의 코멘트: "{comment}"
+
+위 코멘트를 바탕으로 기존 추천 코디에서 어떤 속성을 바꾸면 좋은지 JSON으로만 출력해.
+형식:
+{{
+  "replace": {{
+    "top": "바꿀 상의(없으면 null)",
+    "bottom": "바꿀 하의(없으면 null)",
+    "outer": "바꿀 아우터(없으면 null)"
+  }}
+}}
+"""
+                            }
+                        ]
+                    }
+                )
+                claude_res.raise_for_status()
+                claude_json = claude_res.json()
+                print("✅ Claude 응답:", claude_json)
+
+                # Claude JSON 파싱
+                if "content" in claude_json:
+                    try:
+                        text = claude_json["content"][0]["text"]
+                        replace_json = pyjson.loads(text)
+                    except Exception as e:
+                        print("❌ Claude JSON 파싱 실패:", e)
+
+                # ===== 4. 조건 반영해서 추천 모델 재호출 =====
+                if replace_json:
+                    try:
+                        res2 = requests.post(
+                            "https://wearther-api-932275548518.asia-northeast3.run.app/recommend",
+                            json={
+                                "user_id": uid,
+                                "city": city,
+                                "replace": replace_json.get("replace", {})
+                            }
+                        )
+                        res2.raise_for_status()
+                        new_recommend = res2.json()
+                        print("✅ 조건 반영 새 추천:", new_recommend)
+                        save_data["new_recommend"] = new_recommend.get("recommended", {})
+                    except Exception as e:
+                        print("❌ 새 추천 모델 호출 실패:", e)
+
+                # Firestore에 코멘트 + Claude 응답도 기록
+                db.collection('users').document(uid).collection('recommendation_comments').add({
+                    'recommendation_id': now_str,
+                    'comment': comment,
+                    'claude_response': claude_json,
+                    'replace_json': replace_json,
+                    'new_recommend': new_recommend,
+                    'created_at': datetime.datetime.utcnow()
+                })
+
+                # 프론트 응답에도 포함
+                ai_result["claude_response"] = claude_json
+                ai_result["replace_json"] = replace_json
+                if new_recommend:
+                    ai_result["new_recommend"] = new_recommend
+
+            except Exception as ce:
+                print("❌ Claude API 호출 오류:", ce)
+
+        # ===== 최종 Firestore 저장 (원래 추천 + 새 추천 같이) =====
+        db.collection('users').document(uid).collection('recommendation').document(now_str).set(save_data)
 
         return jsonify(ai_result), 200
+
     except requests.exceptions.RequestException as e:
         print("Error occurred while fetching recommendation:", e)
         return jsonify({"error": str(e)}), 500

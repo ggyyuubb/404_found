@@ -14,13 +14,23 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.compose.ui.graphics.Color
+
 
 // 앱의 다크 모드 색상 정의
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,        // 주요 색상
-    secondary = PurpleGrey80,  // 보조 색상
-    tertiary = Pink80          // 강조 색상
+    primary = Purple80,
+    secondary = PurpleGrey80,
+    tertiary = Pink80,
+
+    background = Color(0xFF0D1B2A),       // 전체 배경
+    surface = Color(0xFF0D1B2A),          // 카드/시트 배경
+    surfaceVariant = Color(0xFF1B263B),   // 시트/메뉴 배경
+    onBackground = Color(0xFFE0E1DD),
+    onSurface = Color(0xFFE0E1DD),
+    onSurfaceVariant = Color(0xFFADB5BD)
 )
+
 
 // 앱의 라이트 모드 색상 정의
 private val LightColorScheme = lightColorScheme(
@@ -81,7 +91,7 @@ fun WeartherTheme(
     // 전체 Material3 테마 적용
     MaterialTheme(
         colorScheme = colorScheme,  // 위에서 결정된 색상 테마
-        typography = Typography,    // 텍스트 스타일 정의
+        typography = AppTypography,    // 텍스트 스타일 정의
         content = content           // 이 테마가 적용될 하위 Composable들
     )
 }

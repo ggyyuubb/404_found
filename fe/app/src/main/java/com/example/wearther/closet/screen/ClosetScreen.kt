@@ -1,4 +1,4 @@
-// closet/screen/ClosetScreen.kt (수정)
+// closet/screen/ClosetScreen.kt (정렬 로직 분리 후)
 package com.example.wearther.closet.screen
 
 import android.net.Uri
@@ -27,13 +27,14 @@ import com.example.wearther.remote.getStoredJwtToken
 import com.example.wearther.ui.screens.closet.components.CategoryTabs
 import com.example.wearther.ui.screens.closet.components.EmptyState
 import com.example.wearther.ui.screens.closet.components.Header
+import com.example.wearther.ui.screens.closet.components.SortOption
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 @Composable
 fun ClosetScreen(
-    onNavigateToUpload: (Uri) -> Unit = {} // 업로드 화면으로 이동하는 콜백
+    onNavigateToUpload: (Uri) -> Unit = {}
 ) {
     val context = LocalContext.current
     val jwtToken = getStoredJwtToken(context)
@@ -51,6 +52,7 @@ fun ClosetScreen(
     var activeSubCategory by remember { mutableStateOf("전체") }
     var allItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
     var filteredItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
+    var currentSortOption by remember { mutableStateOf(SortOption.CATEGORY) }
 
     // 삭제 확인 다이얼로그 상태
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -59,13 +61,18 @@ fun ClosetScreen(
     val coroutineScope = rememberCoroutineScope()
 
     fun applyFiltering(type: String, subCategory: String) {
-        filteredItems = if (type == "전체" || subCategory == "전체") {
+        val baseFiltered = if (type == "전체" || subCategory == "전체") {
             allItems
         } else {
             allItems.filter {
                 it.category.contains(subCategory)
             }
         }
+
+        // 정렬 유틸리티 사용
+        filteredItems = ClosetSortUtils.sortItems(baseFiltered, currentSortOption)
+
+        Log.d("ClosetScreen", "필터링 완료: 전체=${allItems.size}개, 필터=${baseFiltered.size}개, 정렬=${currentSortOption}")
     }
 
     fun fetchClosetImages(type: String) {
@@ -96,19 +103,17 @@ fun ClosetScreen(
         }
     }
 
+    // 정렬 옵션 변경 함수
+    val onSortChange = { newSortOption: SortOption ->
+        Log.d("ClosetScreen", "정렬 옵션 변경: $currentSortOption -> $newSortOption")
+        currentSortOption = newSortOption
+        applyFiltering(activeCategory, activeSubCategory)
+    }
+
     // 삭제 확인 요청 함수
     val requestDelete = { item: ClosetImage ->
         itemToDelete = item
         showDeleteDialog = true
-    }
-
-    // 실제 삭제 실행 함수
-    val confirmDelete = {
-        itemToDelete?.let { item ->
-            deleteImage(item.id)
-        }
-        showDeleteDialog = false
-        itemToDelete = null
     }
 
     LaunchedEffect(Unit) {
@@ -142,7 +147,8 @@ fun ClosetScreen(
 
             Header(
                 totalItems = filteredItems.size,
-                onSortChange = {}
+                currentSortOption = currentSortOption,
+                onSortChange = onSortChange
             )
 
             if (filteredItems.isEmpty()) {
@@ -155,13 +161,13 @@ fun ClosetScreen(
                         .fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp) // FAB 공간 확보
+                    contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(filteredItems) { item ->
                         ItemCard(
                             imageUrl = item.url,
                             category = item.category,
-                            onDelete = { requestDelete(item) } // 삭제 확인 요청으로 변경
+                            onDelete = { requestDelete(item) }
                         )
                     }
                 }

@@ -346,4 +346,8 @@ def share_post(post_id):
     if uid not in shared_by:
         shared_by.append(uid)
     post_ref.update({'share_count': share_count, 'shared_by': shared_by})
-    return jsonify({'message': '공유 완료', 'share_count': share_count}), 200
+
+    # 게시물 URL 생성 (예시: /community/profile/[user_id] 또는 /community/posts/[post_id])
+    post_url = f"https://3.35.56.239/community/posts/{post_id}"
+
+    return jsonify({'message': '공유 완료', 'share_count': share_count, 'url': post_url}), 200

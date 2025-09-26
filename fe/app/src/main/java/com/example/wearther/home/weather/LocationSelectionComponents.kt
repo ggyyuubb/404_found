@@ -314,14 +314,20 @@ fun LocationSearchDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 검색창
+                // 검색창 (한국어 우선 안내)
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     label = {
                         Text(
-                            "도시명 또는 주소 입력 (예: Seoul, Tokyo, New York)",
+                            "도시명 입력 (예: 서울, 부산, 제주, Tokyo, New York)",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            "서울, 부산, 제주...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
                     },
                     leadingIcon = {
@@ -373,6 +379,8 @@ fun LocationSearchDialog(
                             color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("검색 중...")
                     } else {
                         Text("검색")
                     }
@@ -397,6 +405,61 @@ fun LocationSearchDialog(
                             onDelete = null // 검색 결과에서는 삭제 버튼 없음
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                    }
+                } else if (!isSearching && searchQuery.isNotBlank()) {
+                    // 검색했지만 결과가 없는 경우
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "검색 결과가 없습니다",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "다른 검색어를 시도해보세요",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                // 검색 도움말
+                if (searchQuery.isBlank()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Text(
+                                text = "검색 팁",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "• 한국어: 서울, 부산, 대구, 제주\n• 영어: Tokyo, Paris, New York\n• 정확한 도시명을 입력해주세요",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
             }
