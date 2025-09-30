@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,21 +45,29 @@ fun HourlyForecastGraphRow(
     val paddingTop = 10f
     val paddingBottom = 10f
 
-    Column {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Color.White.copy(alpha = 0.15f), // ✨ 반투명 배경
+                RoundedCornerShape(16.dp)
+            )
+            .padding(vertical = 8.dp)
+    ) {
         // ⬇️ 시간별 예보 + 강수량 UI
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(itemSpacingDp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp)
+                .padding(vertical = 12.dp, horizontal = 8.dp)
         ) {
             itemsIndexed(hourlyData) { index, forecast ->
                 val forecastTime = Instant.ofEpochSecond(forecast.dt)
                     .atZone(ZoneId.of("Asia/Seoul"))
                 val hourText = "${forecastTime.hour}시"
                 val weatherMain = forecast.weather.firstOrNull()?.main ?: "Clear"
-                val weatherEmoji = weatherToEmoji(weatherMain)
+                val iconRes = getWeatherIconRes(weatherMain) // 새로 추가한 함수 활용
 
                 Column(
                     modifier = Modifier
@@ -71,18 +81,26 @@ fun HourlyForecastGraphRow(
                         color = sheetTextColor
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text(weatherEmoji, style = MaterialTheme.typography.headlineMedium)
+
+                    // 🔹 Flaticon 아이콘 교체
+                    Icon(
+                        painter = painterResource(id = iconRes),
+                        contentDescription = "날씨 아이콘",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(32.dp)
+                    )
+
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = String.format("%.1f°C", forecast.temp),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                         color = sheetTextColor
                     )
 
                     Spacer(Modifier.height(8.dp))
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.height(48.dp)  // 고정 높이
+                        modifier = Modifier.height(48.dp)
                     ) {
                         // 비 올 확률
                         Text(
@@ -93,16 +111,13 @@ fun HourlyForecastGraphRow(
 
                         Spacer(Modifier.height(4.dp))
 
-                        // 강수량 (비/눈이고 실제 강수량이 있을 때만)
+                        // 강수량
                         val isRainyWeather = weatherMain.lowercase() in listOf("rain", "drizzle", "thunderstorm", "snow")
                         if (isRainyWeather) {
                             val currentRain = forecast.rain?.oneHour ?: 0.0
-
-                            if (currentRain > 0.0) {  // 현재 시간에 강수량이 실제로 있을 때만
-                                // 앞뒤 시간 강수량 추가로 더하기
+                            if (currentRain > 0.0) {
                                 val prevRain = hourlyData.getOrNull(index - 1)?.rain?.oneHour ?: 0.0
                                 val nextRain = hourlyData.getOrNull(index + 1)?.rain?.oneHour ?: 0.0
-
                                 val totalRain = currentRain + prevRain + nextRain
 
                                 Text(
@@ -117,12 +132,11 @@ fun HourlyForecastGraphRow(
             }
         }
 
-        // ⬇️ 온도 그래프 선 그리기
+        // ⬇️ 온도 그래프 (변경 없음)
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(100.dp)
-                .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
                 .padding(8.dp)
         ) {
             val scrollOffsetPx = listState.firstVisibleItemScrollOffset.toFloat()
@@ -137,7 +151,6 @@ fun HourlyForecastGraphRow(
                 Offset(x, y)
             }.filter { it.x in -itemWidthPx..size.width + itemWidthPx }
 
-            // 🔹 곡선 Path
             val path = androidx.compose.ui.graphics.Path().apply {
                 if (points.isNotEmpty()) {
                     moveTo(points.first().x, points.first().y)
@@ -154,7 +167,6 @@ fun HourlyForecastGraphRow(
                 }
             }
 
-            // 🔹 라인: 하늘색 → 보라색
             val gradient = Brush.horizontalGradient(
                 listOf(Color(0xFF64B5F6), Color(0xFFBA68C8))
             )
@@ -165,7 +177,6 @@ fun HourlyForecastGraphRow(
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)
             )
 
-            // 🔹 점: 기본 블루톤, 현재 시간은 민트 포인트
             points.forEachIndexed { index, offset ->
                 val isNow = index == 0
                 drawCircle(

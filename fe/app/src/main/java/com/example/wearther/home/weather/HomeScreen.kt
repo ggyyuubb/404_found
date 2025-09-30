@@ -2,6 +2,7 @@ package com.example.wearther.home.weather
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wearther.home.recommendation.HomeBottomSheetContent
@@ -92,7 +94,7 @@ fun HomeScreen(
 
     BottomSheetScaffold(
         scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = bottomSheetState),
-        sheetPeekHeight = 80.dp,
+        sheetPeekHeight = 110.dp,
         sheetContent = {
             HomeBottomSheetContent(
                 textColor = sheetTextColor,
@@ -118,40 +120,79 @@ fun HomeScreen(
                     .padding(16.dp)
             ) {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = {
-                        coroutineScope.launch {
-                            weatherViewModel.clearWeather()
-                            getCurrentLocation(context)?.let { location ->
-                                weatherViewModel.fetchWeather(location.latitude, location.longitude)
-                                weatherViewModel.fetchAddress(context, location.latitude, location.longitude)
+                    // 🔄 새로고침 버튼 (아이콘 + 텍스트, pill 형태)
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                weatherViewModel.clearWeather()
+                                getCurrentLocation(context)?.let { location ->
+                                    weatherViewModel.fetchWeather(location.latitude, location.longitude)
+                                    weatherViewModel.fetchAddress(context, location.latitude, location.longitude)
 
-                                val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
-                                val jwt = sharedPreferences.getString("jwt", null)
-                                if (!jwt.isNullOrEmpty()) {
-                                    val city = locationText.split(" ").firstOrNull() ?: "Seoul"
-                                    recommendationViewModel.clearRecommendations()
-                                    recommendationViewModel.fetchRecommendations(jwt, city)
+                                    val sharedPreferences = context.getSharedPreferences("myPrefs", Context.MODE_PRIVATE)
+                                    val jwt = sharedPreferences.getString("jwt", null)
+                                    if (!jwt.isNullOrEmpty()) {
+                                        val city = locationText.split(" ").firstOrNull() ?: "Seoul"
+                                        recommendationViewModel.clearRecommendations()
+                                        recommendationViewModel.fetchRecommendations(jwt, city)
+                                    }
+                                    snackbarHostState.showSnackbar("새로고침 되었습니다")
                                 }
-
-                                snackbarHostState.showSnackbar("새로고침 되었습니다")
                             }
-                        }
-                    }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.2f), // ⬅️ 투명 흰색
+                            contentColor = sheetTextColor
+                        ),
+                        shape = RoundedCornerShape(50),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "새로고침",
+                            tint = sheetTextColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "새로고침",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = sheetTextColor
+                        )
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    Text(
-                        text = java.time.LocalDate.now().format(
-                            java.time.format.DateTimeFormatter.ofPattern("yyyy년 M월 d일")
-                        ),
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                        color = sheetTextColor
-                    )
+                    // 📅 날짜 (오늘) - 배경 + 캘린더 이모지
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(
+                                color = Color.White.copy(alpha = 0.2f), // ⬅️ 투명 흰색
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "📅",
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                        Text(
+                            text = java.time.LocalDate.now().format(
+                                java.time.format.DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)")
+                            ),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Medium,
+                                color = sheetTextColor
+                            )
+                        )
+                    }
                 }
 
                 weather?.let {

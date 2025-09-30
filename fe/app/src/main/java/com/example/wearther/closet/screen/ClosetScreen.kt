@@ -1,4 +1,3 @@
-// closet/screen/ClosetScreen.kt (정렬 로직 분리 후)
 package com.example.wearther.closet.screen
 
 import android.net.Uri
@@ -8,16 +7,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.wearther.closet.data.ClosetApi
 import com.example.wearther.closet.data.ClosetImage
 import com.example.wearther.closet.data.ItemCard
@@ -53,8 +56,9 @@ fun ClosetScreen(
     var allItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
     var filteredItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
     var currentSortOption by remember { mutableStateOf(SortOption.CATEGORY) }
+    var isGridView by remember { mutableStateOf(true) }   // ✅ 뷰 모드 상태 추가
 
-    // 삭제 확인 다이얼로그 상태
+    // 삭제 다이얼로그 상태
     var showDeleteDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<ClosetImage?>(null) }
 
@@ -68,11 +72,8 @@ fun ClosetScreen(
                 it.category.contains(subCategory)
             }
         }
-
-        // 정렬 유틸리티 사용
         filteredItems = ClosetSortUtils.sortItems(baseFiltered, currentSortOption)
-
-        Log.d("ClosetScreen", "필터링 완료: 전체=${allItems.size}개, 필터=${baseFiltered.size}개, 정렬=${currentSortOption}")
+        Log.d("ClosetScreen", "필터링 완료: 전체=${allItems.size}, 필터=${baseFiltered.size}, 정렬=${currentSortOption}")
     }
 
     fun fetchClosetImages(type: String) {
@@ -103,14 +104,11 @@ fun ClosetScreen(
         }
     }
 
-    // 정렬 옵션 변경 함수
     val onSortChange = { newSortOption: SortOption ->
-        Log.d("ClosetScreen", "정렬 옵션 변경: $currentSortOption -> $newSortOption")
         currentSortOption = newSortOption
         applyFiltering(activeCategory, activeSubCategory)
     }
 
-    // 삭제 확인 요청 함수
     val requestDelete = { item: ClosetImage ->
         itemToDelete = item
         showDeleteDialog = true
@@ -121,14 +119,23 @@ fun ClosetScreen(
     }
 
     val topCategories = listOf("전체", "상의", "하의", "아우터", "원피스")
-
     var showPhotoDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Gray.copy(alpha = 0.05f))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFFFFFFFF), // 흰색
+                            Color(0xFFFAFAFA), // 아주아주 연한 회색
+                            Color(0xFFF5F5F5), // 아주 연한 회색
+                            Color(0xFFFAFAFA), // 아주아주 연한 회색
+                            Color(0xFFFFFFFF)  // 흰색
+                        )
+                    )
+                )
         ) {
             CategoryTabs(
                 categories = topCategories,
@@ -148,51 +155,86 @@ fun ClosetScreen(
             Header(
                 totalItems = filteredItems.size,
                 currentSortOption = currentSortOption,
-                onSortChange = onSortChange
+                onSortChange = onSortChange,
+                isGridView = isGridView,
+                onToggleView = { isGridView = !isGridView } // ✅ 버튼 연결
             )
 
             if (filteredItems.isEmpty()) {
                 EmptyState()
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                        .fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
-                ) {
-                    items(filteredItems) { item ->
-                        ItemCard(
-                            imageUrl = item.url,
-                            category = item.category,
-                            onDelete = { requestDelete(item) }
-                        )
+                if (isGridView) {
+                    // ✅ 그리드 뷰
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
+                            .fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 10.dp)
+                    ) {
+                        items(filteredItems) { item ->
+                            ItemCard(
+                                imageUrl = item.url,
+                                category = item.category,
+                                onDelete = { requestDelete(item) }
+                            )
+                        }
+                    }
+                } else {
+                    // ✅ 리스트 뷰
+                    LazyColumn(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 1.dp)
+                    ) {
+                        items(filteredItems) { item ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White, shape = MaterialTheme.shapes.medium)
+                                    .padding(8.dp)
+                            ) {
+                                AsyncImage(
+                                    model = item.url,
+                                    contentDescription = "옷 이미지",
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .background(Color.LightGray, shape = MaterialTheme.shapes.small)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = item.category,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.Black
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                TextButton(onClick = { requestDelete(item) }) {
+                                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // + 버튼
         FloatingActionButton(
-            onClick = {
-                showPhotoDialog = true
-            },
+            onClick = { showPhotoDialog = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
             containerColor = Color.Black,
             contentColor = Color.White
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "옷 추가하기"
-            )
+            Icon(imageVector = Icons.Default.Add, contentDescription = "옷 추가하기")
         }
     }
 
-    // 사진 선택 다이얼로그
     if (showPhotoDialog) {
         PhotoSourceSelectionDialog(
             onDismiss = { showPhotoDialog = false },
@@ -203,45 +245,31 @@ fun ClosetScreen(
         )
     }
 
-    // 삭제 확인 다이얼로그
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = {
                 showDeleteDialog = false
                 itemToDelete = null
             },
-            title = {
-                Text(
-                    text = "옷 삭제",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text("이 옷을 삭제하시겠습니까?\n삭제한 옷은 복구할 수 없습니다.")
-            },
+            title = { Text("옷 삭제", fontWeight = FontWeight.Bold) },
+            text = { Text("이 옷을 삭제하시겠습니까?\n삭제한 옷은 복구할 수 없습니다.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        itemToDelete?.let { item ->
-                            deleteImage(item.id)
-                        }
+                        itemToDelete?.let { deleteImage(it.id) }
                         showDeleteDialog = false
                         itemToDelete = null
                     },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("삭제")
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        itemToDelete = null
-                    }
-                ) {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    itemToDelete = null
+                }) {
                     Text("취소")
                 }
             }

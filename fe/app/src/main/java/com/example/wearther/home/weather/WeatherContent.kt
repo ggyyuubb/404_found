@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun WeatherContent(
@@ -94,44 +97,7 @@ fun WeatherContent(
         item { Spacer(modifier = Modifier.height(16.dp)) }
 
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFBBDEFB))
-            ) {
-                val currentMain = data.current.weather.firstOrNull()?.main ?: "Unknown"
-                val weatherEmoji = weatherToEmoji(currentMain)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "현재 ${String.format("%.1f", data.current.temp)}°C (체감 ${String.format("%.1f", data.current.feels_like)}°)",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        todayTemps?.let {
-                            Text(
-                                text = "최고 ${String.format("%.1f", it.temp.max)}° / 최저 ${String.format("%.1f", it.temp.min)}°",
-                                style = MaterialTheme.typography.bodyLarge.copy(color = Color.DarkGray)
-                            )
-                        }
-                    }
-                    Text(
-                        text = weatherEmoji,
-                        style = MaterialTheme.typography.displayLarge,
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
-                }
-            }
+            CurrentWeatherCard(data = data)
         }
 
         if (filteredHourly.isNotEmpty()) {

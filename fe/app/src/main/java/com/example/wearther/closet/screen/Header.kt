@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,7 +30,9 @@ enum class SortOption(val displayName: String) {
 fun Header(
     totalItems: Int,
     currentSortOption: SortOption,
-    onSortChange: (SortOption) -> Unit
+    onSortChange: (SortOption) -> Unit,
+    isGridView: Boolean,                // ✅ 추가
+    onToggleView: () -> Unit            // ✅ 추가
 ) {
     var showDropdown by remember { mutableStateOf(false) }
 
@@ -52,7 +55,7 @@ fun Header(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 정렬 드롭다운
+            // 🔽 정렬 드롭다운
             Box {
                 Row(
                     modifier = Modifier.clickable {
@@ -73,7 +76,6 @@ fun Header(
                     )
                 }
 
-                // 드롭다운 메뉴
                 DropdownMenu(
                     expanded = showDropdown,
                     onDismissRequest = { showDropdown = false },
@@ -98,8 +100,9 @@ fun Header(
                 }
             }
 
+            // 🔄 뷰 전환 버튼
             IconButton(
-                onClick = { /* 그리드 뷰 변경 */ },
+                onClick = { onToggleView() },   // ✅ 여기서 토글
                 modifier = Modifier
                     .size(32.dp)
                     .background(
@@ -108,8 +111,8 @@ fun Header(
                     )
             ) {
                 Icon(
-                    imageVector = Icons.Default.GridView,
-                    contentDescription = "그리드 뷰",
+                    imageVector = if (isGridView) Icons.Default.ViewList else Icons.Default.GridView, // ✅ 아이콘 토글
+                    contentDescription = if (isGridView) "리스트 뷰" else "그리드 뷰",
                     tint = Color.Gray,
                     modifier = Modifier.size(16.dp)
                 )

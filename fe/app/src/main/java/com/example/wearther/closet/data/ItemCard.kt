@@ -28,11 +28,12 @@ fun ItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.8f),
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .aspectRatio(0.75f), // 조금 더 세로로 길게
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Box {
+            // 옷 이미지
             Image(
                 painter = rememberAsyncImagePainter(imageUrl),
                 contentDescription = "옷 이미지",
@@ -40,31 +41,37 @@ fun ItemCard(
                 contentScale = ContentScale.Crop
             )
 
-            // 카테고리 태그
-            androidx.compose.material3.Text(
-                text = category,
-                color = Color.White,
+            // 카테고리 태그 (하단 전체 바)
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            )
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .padding(vertical = 6.dp)
+            ) {
+                androidx.compose.material3.Text(
+                    text = category,
+                    color = Color.White,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
 
-            // 삭제 아이콘
+            // 삭제 버튼
+            // 삭제 버튼
             IconButton(
                 onClick = { onDelete() },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
                     .background(Color.White.copy(alpha = 0.9f), shape = CircleShape)
-                    .size(32.dp)
+                    .size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "삭제",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(16.dp)
+                    tint = Color(0xFF555555), // ✅ 세련된 다크그레이
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
