@@ -100,6 +100,40 @@ class RecommendationViewModel : ViewModel() {
         }
     }
 
+    // 🔹 새로 추가된 sendFeedback 함수
+    fun sendFeedback(jwt: String, location: String, isPositive: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            Log.d("RecoVM", "📤 피드백 전송 시작 - location=$location, isPositive=$isPositive")
+
+            try {
+                val requestBody = gson.toJson(mapOf(
+                    "location" to location,
+                    "isPositive" to isPositive
+                )).toRequestBody("application/json".toMediaType())
+
+                val request = Request.Builder()
+                    .url("${BASE_URL}api/recommend/feedback") // 피드백 API 엔드포인트 (실제 엔드포인트에 맞게 수정)
+                    .addHeader("Authorization", "Bearer $jwt")
+                    .post(requestBody)
+                    .build()
+
+                Log.d("RecoVM", "🌍 피드백 요청 URL: ${request.url}")
+                Log.d("RecoVM", "📦 피드백 Body: location=$location, isPositive=$isPositive")
+
+                val response = client.newCall(request).execute()
+
+                if (response.isSuccessful) {
+                    Log.d("RecoVM", "✅ 피드백 전송 성공")
+                } else {
+                    val errorBody = response.body?.string()
+                    Log.e("RecoVM", "❌ 피드백 전송 실패: code=${response.code}, body=$errorBody")
+                }
+            } catch (e: Exception) {
+                Log.e("RecoVM", "❌ 피드백 전송 중 오류: ${e.message}", e)
+            }
+        }
+    }
+
     fun clearRecommendations() {
         Log.d("RecoVM", "🗑️ 추천 데이터 초기화")
         _recommendations.value = emptyList()

@@ -2,6 +2,7 @@ package com.example.wearther.home.recommendation
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,15 +10,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.wearther.R
 import com.example.wearther.home.weather.WeatherViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeBottomSheetContent(
@@ -36,36 +42,11 @@ fun HomeBottomSheetContent(
     val response by viewModel.response.collectAsState()
 
     var isLoading by remember { mutableStateOf(false) }
-
-    // 위치 변경 감지 → 추천 요청
-    LaunchedEffect(locationText) {
-        Log.d("RECOMMEND_REFRESH", "위치 변경 감지: $locationText")
-
-        if (!locationText.isNullOrBlank()
-            && locationText != "위치를 가져오는 중..."
-            && locationText != "현재 위치"
-        ) {
-            if (!jwt.isNullOrEmpty()) {
-                viewModel.clearRecommendations()
-                isLoading = true
-                try {
-                    viewModel.fetchRecommendations(jwt, locationText)
-                } catch (e: Exception) {
-                    Log.e("RECOMMEND_ERROR", "추천 요청 실패: ${e.message}", e)
-                }
-            } else {
-                Log.w("RECOMMEND_SKIP", "JWT 없음")
-            }
-        } else {
-            Log.w("RECOMMEND_SKIP", "유효하지 않은 위치 정보: '$locationText'")
-        }
-    }
+    val coroutineScope = rememberCoroutineScope()
 
     // 응답 들어오면 로딩 종료
     LaunchedEffect(response) {
-        if (response != null) {
-            isLoading = false
-        }
+        if (response != null) isLoading = false
     }
 
     // 불러오는 중
@@ -93,29 +74,53 @@ fun HomeBottomSheetContent(
         return
     }
 
-    // 추천 데이터 안전하게 가져오기
-    val top = runCatching { response?.getTop() }.getOrNull()
-    val bottom = runCatching { response?.getBottom() }.getOrNull()
-    val outer = runCatching { response?.getOuter() }.getOrNull()
+    // 추천 데이터
+    val items = listOfNotNull(
+        response?.getOuter(),
+        response?.getTop(),
+        response?.getBottom()
+    ).filter { !it.url.isNullOrBlank() }
 
-    val items = listOfNotNull(outer, top, bottom).filter { !it.url.isNullOrBlank() }
-
+    // 🔹 손잡이 색 가져오기
+    val handleColor = Color(0xFFEEEEEE)
+// 🔹 배경 (손잡이 색 → 흰색 그라데이션)
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFFEEEEEE),
+                        Color(0xFFFFFFFF), // 화이트
+                        Color(0xFFEEEEEE)
+                    )
+                )
+            )
             .padding(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "오늘의 날씨는...",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
+
+        // 오늘의 날씨 제목
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                painter = painterResource(id = R.drawable.today_weather),
+                contentDescription = "오늘의 날씨",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "오늘의 날씨는...",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // 날씨 코멘트
         if (temp != null && weatherCode != null) {
             val weatherResponse by weatherViewModel.weatherData.collectAsState()
             val advice = weatherResponse?.let {
@@ -128,97 +133,109 @@ fun HomeBottomSheetContent(
             }
 
             advice?.comments?.filter { it.isNotBlank() }?.forEach { comment ->
-                Surface(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(12.dp),
-                    tonalElevation = 2.dp,
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    Text(
-                        text = comment,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        fontSize = 14.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        Text(
-            text = "오늘의 추천 코디는...",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (items.isEmpty()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "추천 코디를 준비 중입니다",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (locationText.isNullOrBlank()) "위치 정보 확인 후 다시 시도해주세요"
-                        else "잠시 후 다시 확인해주세요",
-                        color = Color.Gray,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items.forEach { item ->
                     Box(
-                        modifier = Modifier
-                            .size(width = 160.dp, height = 200.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.wrapContentWidth()
                     ) {
-                        AsyncImage(
-                            model = item.url ?: "",
-                            contentDescription = item.category ?: "의류",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter)
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .padding(6.dp)
+                        Surface(
+                            color = Color.White,
+                            shape = RoundedCornerShape(16.dp),
+                            shadowElevation = 4.dp,
+                            modifier = Modifier.padding(start = 12.dp)
                         ) {
                             Text(
-                                text = item.category ?: "의류",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.Center)
+                                text = comment,
+                                color = Color.Black,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                             )
+                        }
+
+                        // 꼬리
+                        Canvas(
+                            modifier = Modifier
+                                .size(13.dp)
+                                .align(Alignment.BottomStart)
+                                .offset(x = 2.dp, y = (-6).dp)
+                        ) {
+                            val path = Path().apply {
+                                moveTo(size.width, 0f)
+                                lineTo(0f, size.height / 2)
+                                lineTo(size.width, size.height)
+                                close()
+                            }
+                            drawPath(path, Color.White)
                         }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 추천 코디 제목
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                painter = painterResource(id = R.drawable.clothes_rack),
+                contentDescription = "추천 코디",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "오늘의 추천 코디는...",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 추천 카드
+        if (items.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items.forEach { item ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(6.dp),
+                        modifier = Modifier.size(width = 160.dp, height = 200.dp)
+                    ) {
+                        Box {
+                            AsyncImage(
+                                model = item.url,
+                                contentDescription = item.category,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Surface(
+                                color = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = item.category ?: "의류",
+                                    color = Color.Black,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(8.dp),
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 🔹 개선된 피드백 컴포넌트 호출
         RecommendationFeedbackComponent(
             jwt = jwt,
             locationText = locationText,
@@ -228,15 +245,15 @@ fun HomeBottomSheetContent(
         if (!errorMessage.isNullOrBlank() && response == null) {
             Spacer(modifier = Modifier.height(16.dp))
             Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFFEBEE),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = errorMessage.orEmpty(),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    color = Color(0xFFD32F2F),
                     fontSize = 14.sp,
-                    modifier = Modifier.padding(12.dp)
+                    modifier = Modifier.padding(16.dp)
                 )
             }
         }

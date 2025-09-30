@@ -1,9 +1,11 @@
-// closet/upload/screen/CategorySelectionScreen.kt (수정)
+// closet/upload/screen/CategorySelectionScreen.kt
 package com.example.wearther.closet.upload
 
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -44,7 +47,7 @@ import java.io.FileOutputStream
 fun CategorySelectionScreen(
     selectedImageUri: Uri,
     onNavigateBack: () -> Unit,
-    onUploadSuccess: () -> Unit // 업로드 성공 시 호출
+    onUploadSuccess: () -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -62,7 +65,7 @@ fun CategorySelectionScreen(
 
     val canProceed = selectedType.isNotEmpty() && selectedCategory.isNotEmpty() && !isUploading
 
-    // Retrofit 설정
+    // ✅ Retrofit 설정
     val retrofit = remember {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -71,11 +74,9 @@ fun CategorySelectionScreen(
     }
     val uploadApi = retrofit.create(UploadApi::class.java)
 
-    // 업로드 함수
+    // ✅ 업로드 함수
     fun uploadImage() {
         if (!canProceed) return
-        Log.d("CategorySelection", "업로드 시작: type=$selectedType, category=$selectedCategory")
-
         coroutineScope.launch {
             isUploading = true
             try {
@@ -85,15 +86,11 @@ fun CategorySelectionScreen(
                     return@launch
                 }
 
-                // URI를 File로 변환
                 val file = uriToFile(context, selectedImageUri)
-                Log.d("CategorySelection", "파일 생성됨: ${file.name}, 크기: ${file.length()} bytes")
                 val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                 val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
                 val typePart = selectedType.toRequestBody("text/plain".toMediaTypeOrNull())
                 val categoryPart = selectedCategory.toRequestBody("text/plain".toMediaTypeOrNull())
-
-                Log.d("CategorySelection", "서버 요청 시작...")
 
                 val response = uploadApi.uploadClothes(
                     token = "Bearer $jwtToken",
@@ -101,9 +98,7 @@ fun CategorySelectionScreen(
                     type = typePart,
                     category = categoryPart
                 )
-                Log.d("CategorySelection", "서버 응답: $response")
 
-                // 임시 파일 삭제
                 file.delete()
 
                 if (response.error != null) {
@@ -114,161 +109,166 @@ fun CategorySelectionScreen(
                 }
 
             } catch (e: Exception) {
-                Toast.makeText(context, "업로드 중 오류 발생: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "업로드 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
             } finally {
                 isUploading = false
             }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-        // Top Bar
-        TopAppBar(
-            title = { Text("카테고리 선택") },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
-                }
-            },
-            actions = {
-                Button(
-                    onClick = { uploadImage() },
-                    enabled = canProceed,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (canProceed) Color.Black else Color.Gray,
-                        contentColor = Color.White
-                    )
-                ) {
-                    if (isUploading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(if (isUploading) "업로드 중..." else "업로드")
-                }
-            }
-        )
+    // ✅ 애니메이션 효과
+    val buttonColor by animateColorAsState(
+        targetValue = if (canProceed) Color.Black else Color.Gray,
+        label = "ButtonColorAnim"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (canProceed) 1f else 0.95f,
+        label = "ButtonScaleAnim"
+    )
 
-        Column(
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("카테고리 선택", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
+                    }
+                },
+                actions = {
+                    // ✅ 업로드 버튼 (애니메이션 적용)
+                    FilledTonalButton(
+                        onClick = { uploadImage() },
+                        enabled = canProceed,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.scale(scale),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = buttonColor,
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = if (canProceed) 6.dp else 0.dp
+                        )
+                    ) {
+                        if (isUploading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("업로드 중...")
+                        } else {
+                            Text("업로드")
+                        }
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(innerPadding)
         ) {
-            // 선택된 이미지 미리보기 (전체 이미지 보이도록 수정)
-            Card(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp), // 높이 증가
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                AsyncImage(
-                    model = selectedImageUri,
-                    contentDescription = "선택된 이미지",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit // Crop 대신 Fit 사용으로 전체 이미지 표시
-                )
-            }
-
-            // 타입 선택 섹션
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    "옷의 종류를 선택해주세요",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
+                // ✅ 이미지 미리보기
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(typeCategoryMap.keys.toList()) { type ->
-                        FilterChip(
-                            onClick = {
-                                selectedType = type
-                                selectedCategory = "" // 타입 변경시 카테고리 초기화
-                            },
-                            label = {
-                                Text(
-                                    type,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            },
-                            selected = selectedType == type,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color.Black,
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.Gray.copy(alpha = 0.1f),
-                                labelColor = Color.Black
-                            ),
-                            modifier = Modifier.height(48.dp)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .aspectRatio(0.75f),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "선택된 이미지",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
                     }
                 }
-            }
 
-            // 세부 카테고리 선택 섹션
-            if (selectedType.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(
-                        "세부 카테고리를 선택해주세요",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
+                // ✅ 타입 선택
+                Column {
+                    Text("옷의 종류", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.height(12.dp))
 
-                    val categories = typeCategoryMap[selectedType] ?: emptyList()
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.height(((categories.size / 3 + 1) * 56).dp)
-                    ) {
-                        items(categories) { category ->
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(typeCategoryMap.keys.toList()) { type ->
                             FilterChip(
-                                onClick = { selectedCategory = category },
-                                label = {
-                                    Text(
-                                        category,
-                                        fontSize = 14.sp,
-                                        maxLines = 1
-                                    )
+                                selected = selectedType == type,
+                                onClick = {
+                                    selectedType = type
+                                    selectedCategory = ""
                                 },
-                                selected = selectedCategory == category,
+                                label = { Text(type) },
+                                shape = RoundedCornerShape(20.dp),
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color.Black,
-                                    selectedLabelColor = Color.White,
-                                    containerColor = Color.Gray.copy(alpha = 0.1f),
-                                    labelColor = Color.Black
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = Color.White
+                                )
                             )
+                        }
+                    }
+                }
+
+                // ✅ 세부 카테고리
+                if (selectedType.isNotEmpty()) {
+                    Column {
+                        Text("세부 카테고리", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.height(12.dp))
+
+                        val categories = typeCategoryMap[selectedType] ?: emptyList()
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.height(((categories.size / 3 + 1) * 56).dp)
+                        ) {
+                            items(categories) { category ->
+                                FilterChip(
+                                    selected = selectedCategory == category,
+                                    onClick = { selectedCategory = category },
+                                    label = { Text(category, fontSize = 14.sp) },
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = Color.Gray.copy(alpha = 0.1f),
+                                        labelColor = Color.Black
+                                    ),
+                                    modifier = Modifier.height(40.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // 선택 상태 표시
+            // ✅ 선택 완료 안내 (하단 고정)
             if (selectedType.isNotEmpty() && selectedCategory.isNotEmpty()) {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color.Green.copy(alpha = 0.1f)
+                        containerColor = Color(0xFF2C2C2C)
                     ),
-                    shape = RoundedCornerShape(8.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -279,28 +279,15 @@ fun CategorySelectionScreen(
                         Icon(
                             Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = Color.Green,
-                            modifier = Modifier.size(24.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "선택 완료",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Green
-                            )
-                            Text(
-                                "$selectedType > $selectedCategory",
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
                         Text(
-                            "업로드 버튼을 눌러주세요",
-                            fontSize = 12.sp,
-                            color = Color.Gray
+                            "$selectedType > $selectedCategory 선택됨",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
                 }
@@ -309,16 +296,12 @@ fun CategorySelectionScreen(
     }
 }
 
-// URI를 File로 변환하는 헬퍼 함수
+// ✅ URI → File 변환 함수
 private fun uriToFile(context: android.content.Context, uri: Uri): File {
     val contentResolver = context.contentResolver
     val file = File(context.cacheDir, "temp_image_${System.currentTimeMillis()}.jpg")
-
     contentResolver.openInputStream(uri)?.use { input ->
-        FileOutputStream(file).use { output ->
-            input.copyTo(output)
-        }
+        FileOutputStream(file).use { output -> input.copyTo(output) }
     }
-
     return file
 }

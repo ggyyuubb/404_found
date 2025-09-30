@@ -1,11 +1,14 @@
 package com.example.wearther.ui.screens.closet.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Divider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -30,73 +33,62 @@ fun CategoryTabs(
     )
 
     val subCategories = subCategoryMap[activeCategory] ?: emptyList()
+    val activeColor = Color(0xFF1565C0) // 🔹 조금 더 짙은 블루
 
     Column(modifier = Modifier.background(Color.White)) {
-        Row(
+        // 🔹 상위 카테고리 탭
+        LazyRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            categories.forEach { category ->
-                Column(
-                    modifier = Modifier.clickable {
-                        if (activeCategory != category) {
-                            onCategoryChange(category)
-                        }
-                    }
+            items(categories) { category ->
+                val isActive = activeCategory == category
+                Surface(
+                    modifier = Modifier
+                        .clickable { if (!isActive) onCategoryChange(category) },
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Transparent,
+                    border = if (isActive) BorderStroke(2.dp, activeColor) else null
                 ) {
                     Text(
                         text = category,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (activeCategory == category) Color.Black else Color.Gray
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isActive) activeColor else Color.Gray,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                     )
-                    if (activeCategory == category) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .height(2.dp)
-                                .width(40.dp)
-                                .background(Color.Black)
-                        )
-                    }
                 }
             }
         }
 
         Divider(color = Color.Gray.copy(alpha = 0.2f), thickness = 1.dp)
 
+        // 🔹 하위 카테고리 탭 (상위와 동일 스타일)
         if (subCategories.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(subCategories) { sub ->
-                    Column(
-                        modifier = Modifier.clickable {
-                            if (activeSubCategory != sub) {
-                                onSubCategoryChange(sub)
-                            }
-                        }
+                    val isActive = activeSubCategory == sub
+                    Surface(
+                        modifier = Modifier
+                            .clickable { if (!isActive) onSubCategoryChange(sub) },
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.Transparent,
+                        border = if (isActive) BorderStroke(2.dp, activeColor) else null
                     ) {
                         Text(
                             text = sub,
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = if (activeSubCategory == sub) Color.Black else Color.Gray
+                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isActive) activeColor else Color.Gray,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
-                        if (activeSubCategory == sub) {
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Box(
-                                modifier = Modifier
-                                    .height(1.5.dp)
-                                    .width(36.dp)
-                                    .background(Color.Black)
-                            )
-                        }
                     }
                 }
             }
