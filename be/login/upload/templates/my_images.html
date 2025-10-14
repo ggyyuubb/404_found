@@ -16,9 +16,10 @@
             background: #fafafa;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
             vertical-align: top;
+            width: 220px;
         }
         .image-card img { width: 150px; height: 150px; object-fit: cover; border-radius: 4px; }
-        .image-meta { font-size: 13px; color: #555; margin: 8px 0; }
+        .image-meta { font-size: 13px; color: #555; margin: 8px 0; text-align: left; }
         .delete-btn, .edit-btn {
             background: #e74c3c; color: #fff; border: none; border-radius: 4px;
             padding: 6px 12px; cursor: pointer; margin-top: 8px;
@@ -26,36 +27,88 @@
         .edit-btn { background: #3498db; margin-left: 6px; }
         .edit-btn:hover { background: #217dbb; }
         .delete-btn:hover { background: #c0392b; }
-        .edit-form { margin-top: 8px; font-size: 13px; background: #f4f8fb; padding: 8px; border-radius: 6px; }
+        .edit-form { margin-top: 8px; font-size: 13px; background: #f4f8fb; padding: 8px; border-radius: 6px; text-align:left;}
+        .edit-form select, .edit-form input { margin: 4px 0; }
     </style>
 </head>
 <body>
     <h2>내 이미지 목록</h2>
     <div id="imageList"></div>
+
     <script>
-        const categories = [
-            'blazer', 'cardigan', 'coat', 'cotton pants', 'denim', 'dress', 'hood',
-            'longpedding', 'longsleeve', 'shirt', 'shortpedding', 'shorts',
-            'shortsleeve', 'skirt', 'slacks', 'sleeveless', 'sweater', 'trainingpants',
-            'hoodzip', 'fleece', 'jumper'
-        ];
-        const colors = [
-            'Beige', 'Black', 'Blue', 'Brown', 'Gray', 'Green', 'Orange',
-            'Pink', 'Purple', 'Red', 'White', 'Yellow'
-        ];
-        const materials = [
-            '면','데님','니트','린넨/마','가죽','퍼/털','시폰/얇은 원단','실크/새틴',
-            '스판덱스/신축성 스포츠 원단','나일론/ 방수원단','울/정장소재','니트/스웨터소재',
-            '벨벳','트위드'
-        ];
+        const categoryMap = {
+            'blazer': '블레이저',
+            'cardigan': '가디건',
+            'coat': '코트',
+            'cotton pants': '코튼 팬츠',
+            'denim': '데님',
+            'dress': '드레스',
+            'hood': '후드',
+            'longpedding': '롱패딩',
+            'longsleeve': '긴소매',
+            'shirt': '셔츠',
+            'shortpedding': '숏패딩',
+            'shorts': '반바지',
+            'shortsleeve': '반소매',
+            'skirt': '스커트',
+            'slacks': '슬랙스',
+            'sleeveless': '민소매',
+            'sweater': '스웨터',
+            'trainingpants': '트레이닝 팬츠',
+            'hoodzip': '후드집업',
+            'fleece': '플리스',
+            'jumper': '점퍼'
+        };
+
+        const colorMap = {
+            'Beige': '베이지',
+            'Black': '검정',
+            'Blue': '파랑',
+            'Brown': '갈색',
+            'Gray': '회색',
+            'Green': '초록',
+            'Orange': '주황',
+            'Pink': '분홍',
+            'Purple': '보라',
+            'Red': '빨강',
+            'White': '하양',
+            'Yellow': '노랑'
+        };
+
+        const materialMap = {
+            '면': '면',
+            '데님': '데님',
+            '니트': '니트',
+            '린넨/마': '린넨/마',
+            '가죽': '가죽',
+            '퍼/털': '퍼/털',
+            '시폰/얇은 원단': '시폰/얇은 원단',
+            '실크/새틴': '실크/새틴',
+            '스판덱스/신축성 스포츠 원단': '스판덱스/스포츠 원단',
+            '나일론/ 방수원단': '나일론/방수',
+            '울/정장소재': '울/정장소재',
+            '니트/스웨터소재': '니트/스웨터소재',
+            '벨벳': '벨벳',
+            '트위드': '트위드'
+        };
 
         let editOpenId = null;
 
         async function loadImages() {
             const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
             const res = await fetch('/upload/my_images', {
                 headers: { 'Authorization': 'Bearer ' + jwt }
             });
+            if (!res.ok) {
+                alert('이미지를 불러오지 못했습니다.');
+                return;
+            }
             const data = await res.json();
             const container = document.getElementById('imageList');
             container.innerHTML = '';
@@ -63,50 +116,56 @@
                 container.innerHTML = '<p>등록된 이미지가 없습니다.</p>';
                 return;
             }
+
             data.images.forEach(img => {
                 const div = document.createElement('div');
                 div.className = 'image-card';
                 div.innerHTML = `
                     <img src="${img.url}" alt="내 이미지" /><br/>
                     <div class="image-meta">
-                        <strong>의류 종류:</strong> ${img.clothing_type || '-'}<br/>
-                        <strong>소재:</strong> ${img.material || '-'}<br/>
-                        <strong>색상:</strong> ${(img.colors || []).join(', ')}<br/>
+                        <strong>의류 종류:</strong> ${categoryMap[img.clothing_type] || '-'}<br/>
+                        <strong>소재:</strong> ${materialMap[img.material] || '-'}<br/>
+                        <strong>색상:</strong> ${(img.colors || []).map(c => colorMap[c] || c).join(', ') || '-'}<br/>
                         <strong>업로드 시간:</strong> ${img.uploaded_at || '-'}
                     </div>
                     <button class="delete-btn" onclick="deleteImage('${img.id}')">삭제</button>
-                    <button class="edit-btn" onclick="openEditForm('${img.id}', '${img.clothing_type || ''}', '${img.material || ''}', ${JSON.stringify(img.colors || [])})">수정</button>
+                    <button class="edit-btn" onclick="openEditForm('${img.id}', '${img.clothing_type || ''}', '${img.material || ''}', ${(JSON.stringify(img.colors || []))})">수정</button>
                     <div id="editForm-${img.id}" style="display:none;"></div>
                 `;
                 container.appendChild(div);
             });
         }
 
-        function openEditForm(imageId, clothing_type, material, colorsSelected=[]) {
+        function openEditForm(imageId, clothing_type, material, colors) {
             if (editOpenId && editOpenId !== imageId) {
                 document.getElementById('editForm-' + editOpenId).style.display = 'none';
             }
             editOpenId = imageId;
             const formDiv = document.getElementById('editForm-' + imageId);
+            const selectedColors = Array.isArray(colors) ? colors : [];
+
             formDiv.style.display = '';
-
-            const colorCheckboxes = colors.map(c =>
-                `<label><input type="checkbox" name="colors" value="${c}" ${colorsSelected.includes(c)?'checked':''}/> ${c}</label><br/>`
-            ).join("");
-
             formDiv.innerHTML = `
                 <form class="edit-form" onsubmit="submitEdit(event, '${imageId}')">
                     <label>의류 종류:
                         <select name="clothing_type">
-                            ${categories.map(c => `<option value="${c}" ${c===clothing_type?'selected':''}>${c}</option>`).join("")}
+                            ${Object.entries(categoryMap).map(([en, ko]) =>
+                                `<option value="${en}" ${clothing_type === en ? 'selected' : ''}>${ko}</option>`
+                            ).join('')}
                         </select>
-                    </label><br/><br/>
+                    </label><br/>
                     <label>소재:
                         <select name="material">
-                            ${materials.map(m => `<option value="${m}" ${m===material?'selected':''}>${m}</option>`).join("")}
+                            ${Object.entries(materialMap).map(([en, ko]) =>
+                                `<option value="${en}" ${material === en ? 'selected' : ''}>${ko}</option>`
+                            ).join('')}
                         </select>
-                    </label><br/><br/>
-                    <div><strong>색상:</strong><br/>${colorCheckboxes}</div><br/>
+                    </label><br/>
+                    <label>색상:</label><br/>
+                    ${Object.entries(colorMap).map(([en, ko]) =>
+                        `<label><input type="checkbox" name="colors" value="${en}" ${selectedColors.includes(en) ? 'checked' : ''}/> ${ko}</label><br/>`
+                    ).join('')}
+                    <br/>
                     <button type="submit">저장</button>
                     <button type="button" onclick="closeEditForm('${imageId}')">취소</button>
                 </form>
@@ -124,9 +183,7 @@
             const form = e.target;
             const clothing_type = form.clothing_type.value;
             const material = form.material.value;
-            const colorsSelected = Array.from(form.querySelectorAll('input[name="colors"]:checked'))
-                                        .map(cb => cb.value);
-            const payload = { clothing_type, material, colors: colorsSelected };
+            const colors = Array.from(form.querySelectorAll('input[name="colors"]:checked')).map(c => c.value);
 
             const res = await fetch(`/upload/edit_image/${imageId}`, {
                 method: 'PUT',
@@ -134,7 +191,7 @@
                     'Authorization': 'Bearer ' + jwt,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ clothing_type, material, colors })
             });
             if (res.ok) {
                 alert('수정 성공!');
@@ -147,8 +204,8 @@
         }
 
         async function deleteImage(imageId) {
-            const jwt = localStorage.getItem('jwt');
             if (!confirm('정말 삭제하시겠습니까?')) return;
+            const jwt = localStorage.getItem('jwt');
             const res = await fetch(`/upload/delete_image/${imageId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': 'Bearer ' + jwt }
@@ -163,6 +220,9 @@
         }
 
         window.onload = () => { loadImages(); }
+        window.openEditForm = openEditForm;
+        window.closeEditForm = closeEditForm;
+        window.submitEdit = submitEdit;
     </script>
 </body>
 </html>

@@ -20,7 +20,7 @@ import com.example.wearther.setting.screen.EditNicknameScreen
 import com.example.wearther.setting.screen.RegisterScreen
 import com.example.wearther.setting.screen.SettingScreen
 import com.example.wearther.closet.screen.ClosetScreen
-import com.example.wearther.community.screen.FriendsScreen
+import com.example.wearther.community.screen.CommunityScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,8 +98,8 @@ fun NavGraph() {
                     }
                 }
 
-                composable("friends") {
-                    FriendsScreen(navController)
+                composable("community") {
+                    CommunityScreen(navController)
                 }
 
                 composable("settings") {

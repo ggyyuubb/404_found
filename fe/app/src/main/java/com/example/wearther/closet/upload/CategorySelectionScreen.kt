@@ -1,4 +1,3 @@
-// closet/upload/screen/CategorySelectionScreen.kt
 package com.example.wearther.closet.upload
 
 import android.net.Uri
@@ -6,7 +5,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -36,7 +34,6 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
@@ -65,7 +62,6 @@ fun CategorySelectionScreen(
 
     val canProceed = selectedType.isNotEmpty() && selectedCategory.isNotEmpty() && !isUploading
 
-    // ✅ Retrofit 설정
     val retrofit = remember {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -74,7 +70,6 @@ fun CategorySelectionScreen(
     }
     val uploadApi = retrofit.create(UploadApi::class.java)
 
-    // ✅ 업로드 함수
     fun uploadImage() {
         if (!canProceed) return
         coroutineScope.launch {
@@ -89,26 +84,53 @@ fun CategorySelectionScreen(
                 val file = uriToFile(context, selectedImageUri)
                 val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                 val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
-                val typePart = selectedType.toRequestBody("text/plain".toMediaTypeOrNull())
-                val categoryPart = selectedCategory.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                val response = uploadApi.uploadClothes(
+                Log.d("Upload", "업로드 시작: category=$selectedCategory")
+
+                // 기존 업로드 API 사용 (AI가 백그라운드에서 분석)
+                val response = uploadApi.uploadImage(
                     token = "Bearer $jwtToken",
-                    image = imagePart,
-                    type = typePart,
-                    category = categoryPart
+                    image = imagePart
                 )
+
+                Log.d("Upload", "서버 응답: $response")
+                Log.d("Upload", "AI 분석 결과: ${response.ai_result}")
 
                 file.delete()
 
                 if (response.error != null) {
                     Toast.makeText(context, "업로드 실패: ${response.error}", Toast.LENGTH_LONG).show()
                 } else {
+                    // AI 분석 결과 로그 출력
+                    response.ai_result?.let { ai ->
+                        Log.d("AIResult", "=== AI 분석 결과 ===")
+                        Log.d("AIResult", "clothing_type: ${ai.clothing_type}")
+                        Log.d("AIResult", "colors: ${ai.colors}")
+                        Log.d("AIResult", "material: ${ai.material}")
+                        Log.d("AIResult", "suitable_temperature: ${ai.suitable_temperature}")
+                        Log.d("AIResult", "==================")
+                    }
+
+                    // 사용자가 선택한 카테고리로 업데이트
+                    if (response.id != null) {
+                        try {
+                            val updateResponse = uploadApi.updateClothing(
+                                token = "Bearer $jwtToken",
+                                imageId = response.id,
+                                clothingType = selectedCategory
+                            )
+                            Log.d("Upload", "카테고리 업데이트 완료: $updateResponse")
+                        } catch (e: Exception) {
+                            Log.e("Upload", "카테고리 업데이트 실패", e)
+                        }
+                    }
+
                     Toast.makeText(context, "업로드 완료!", Toast.LENGTH_SHORT).show()
                     onUploadSuccess()
                 }
 
             } catch (e: Exception) {
+                Log.e("Upload", "업로드 오류", e)
                 Toast.makeText(context, "업로드 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
             } finally {
                 isUploading = false
@@ -116,7 +138,6 @@ fun CategorySelectionScreen(
         }
     }
 
-    // ✅ 애니메이션 효과
     val buttonColor by animateColorAsState(
         targetValue = if (canProceed) Color.Black else Color.Gray,
         label = "ButtonColorAnim"
@@ -136,12 +157,13 @@ fun CategorySelectionScreen(
                     }
                 },
                 actions = {
-                    // ✅ 업로드 버튼 (애니메이션 적용)
                     FilledTonalButton(
                         onClick = { uploadImage() },
                         enabled = canProceed,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.scale(scale),
+                        modifier = Modifier
+                            .scale(scale)
+                            .padding(end = 8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = buttonColor,
                             contentColor = Color.White
@@ -178,7 +200,30 @@ fun CategorySelectionScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // ✅ 이미지 미리보기
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFF3E0)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = Color(0xFFE65100)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "옷의 종류를 선택해주세요. AI 분석 결과는 로그에서 확인할 수 있습니다.",
+                            fontSize = 14.sp,
+                            color = Color(0xFFE65100)
+                        )
+                    }
+                }
+
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -199,7 +244,6 @@ fun CategorySelectionScreen(
                     }
                 }
 
-                // ✅ 타입 선택
                 Column {
                     Text("옷의 종류", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Spacer(Modifier.height(12.dp))
@@ -223,7 +267,6 @@ fun CategorySelectionScreen(
                     }
                 }
 
-                // ✅ 세부 카테고리
                 if (selectedType.isNotEmpty()) {
                     Column {
                         Text("세부 카테고리", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -256,7 +299,6 @@ fun CategorySelectionScreen(
                 }
             }
 
-            // ✅ 선택 완료 안내 (하단 고정)
             if (selectedType.isNotEmpty() && selectedCategory.isNotEmpty()) {
                 Card(
                     modifier = Modifier
@@ -296,7 +338,6 @@ fun CategorySelectionScreen(
     }
 }
 
-// ✅ URI → File 변환 함수
 private fun uriToFile(context: android.content.Context, uri: Uri): File {
     val contentResolver = context.contentResolver
     val file = File(context.cacheDir, "temp_image_${System.currentTimeMillis()}.jpg")

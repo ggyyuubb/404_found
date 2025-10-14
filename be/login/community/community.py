@@ -261,74 +261,19 @@ def profile_page(user_id):
     db = firestore.client()
     user_doc = db.collection('users').document(user_id).get()
     if not user_doc.exists:
-        return render_template('profile_not_found.html', user_id=user_id)
+        return jsonify({'error': '사용자 없음'}), 404
     user = user_doc.to_dict()
     created_at = user.get('created_at')
     if hasattr(created_at, 'strftime'):
         created_at = created_at.strftime('%Y-%m-%d %H:%M:%S')
-    posts_ref = db.collection('community_posts').where('user_id', '==', user_id).order_by('created_at', direction=firestore.Query.DESCENDING)
-    posts = []
-    for doc in posts_ref.stream():
-        post = doc.to_dict()
-        post['id'] = doc.id
-        likes = post.get('likes', [])
-        post['likes_count'] = len(likes)
-        posts.append(post)
-    friends_ref = db.collection('users').document(user_id).collection('friends')
-    friends = [f.to_dict() for f in friends_ref.stream()]
-    current_user_id = None
-    is_friend = False
-    try:
-        current_user_id = get_jwt_identity()
-        if current_user_id and current_user_id != user_id:
-            my_friends_ref = db.collection('users').document(current_user_id).collection('friends').document(user_id)
-            is_friend = my_friends_ref.get().exists
-    except Exception:
-        pass
-    return render_template(
-        'community_profile.html',
-        user=user,
-        posts=posts,
-        created_at=created_at,
-        friends=friends,
-        current_user_id=current_user_id,
-        is_friend=is_friend
-    )
-
-@community_bp.route('/community/add_friend/<friend_id>', methods=['POST'])
-@jwt_required()
-def add_friend(friend_id):
-    uid = get_jwt_identity()
-    if uid == friend_id:
-        return jsonify({'error': '본인은 친구추가 불가'}), 400
-    db = firestore.client()
-    friend_ref = db.collection('users').document(uid).collection('friends').document(friend_id)
-    if friend_ref.get().exists:
-        return jsonify({'error': '이미 친구입니다.'}), 400
-    friend_doc = db.collection('users').document(friend_id).get()
-    if not friend_doc.exists:
-        return jsonify({'error': '사용자 없음'}), 404
-    friend_data = friend_doc.to_dict()
-    friend_ref.set({
-        'user_id': friend_id,
-        'nickname': friend_data.get('nickname', friend_id),
-        'email': friend_data.get('email', ''),
-        'added_at': datetime.utcnow()
-    })
-    return jsonify({'message': '친구 추가 완료'}), 200
-
-@community_bp.route('/community/delete_friend/<friend_id>', methods=['POST'])
-@jwt_required()
-def delete_friend(friend_id):
-    uid = get_jwt_identity()
-    if uid == friend_id:
-        return jsonify({'error': '본인은 친구삭제 불가'}), 400
-    db = firestore.client()
-    friend_ref = db.collection('users').document(uid).collection('friends').document(friend_id)
-    if not friend_ref.get().exists:
-        return jsonify({'error': '친구가 아닙니다.'}), 400
-    friend_ref.delete()
-    return jsonify({'message': '친구 삭제 완료'}), 200
+    # 필요한 프로필 정보만 반환
+    return jsonify({
+        'user_id': user_id,
+        'nickname': user.get('nickname', ''),
+        'profile_image': user.get('profile_image', ''),
+        'age_group': user.get('age_group', ''),
+        'email': user.get('email', ''),
+    }), 200
 
 @community_bp.route('/community/posts/<post_id>/share', methods=['POST'])
 @jwt_required()
@@ -347,7 +292,82 @@ def share_post(post_id):
         shared_by.append(uid)
     post_ref.update({'share_count': share_count, 'shared_by': shared_by})
 
-    # 게시물 URL 생성 (예시: /community/profile/[user_id] 또는 /community/posts/[post_id])
     post_url = f"https://3.35.56.239/community/posts/{post_id}"
 
     return jsonify({'message': '공유 완료', 'share_count': share_count, 'url': post_url}), 200
+
+@community_bp.route('/community/search_friend', methods=['GET'])
+@jwt_required()
+def search_friend():
+    keyword = request.args.get('nickname', '').strip()
+    if not keyword:
+        return jsonify({'error': '닉네임을 입력하세요.'}), 400
+    db = firestore.client()
+    users_ref = db.collection('users').stream()
+    results = []
+    for doc in users_ref:
+        user = doc.to_dict()
+        if 'nickname' in user and keyword in user['nickname']:
+            user['user_id'] = doc.id
+            results.append(user)
+    return jsonify({'results': results}), 200
+
+@community_bp.route('/community/add_friend_by_nickname', methods=['POST'])
+@jwt_required()
+def add_friend_by_nickname():
+    uid = get_jwt_identity()
+    data = request.get_json()
+    nickname = data.get('nickname', '').strip()
+    if not nickname:
+        return jsonify({'error': '닉네임을 입력하세요.'}), 400
+    db = firestore.client()
+    users_ref = db.collection('users').stream()
+    friend_doc = None
+    for doc in users_ref:
+        user = doc.to_dict()
+        if 'nickname' in user and nickname == user['nickname']:
+            friend_doc = doc
+            break
+    if not friend_doc:
+        return jsonify({'error': '해당 닉네임의 사용자가 없습니다.'}), 404
+    friend_id = friend_doc.id
+    if uid == friend_id:
+        return jsonify({'error': '본인은 친구추가 불가'}), 400
+    friend_ref = db.collection('users').document(uid).collection('friends').document(friend_id)
+    if friend_ref.get().exists:
+        return jsonify({'error': '이미 친구입니다.'}), 400
+    friend_data = friend_doc.to_dict()
+    friend_ref.set({
+        'user_id': friend_id,
+        'nickname': friend_data.get('nickname', friend_id),
+        'email': friend_data.get('email', ''),
+        'added_at': datetime.utcnow()
+    })
+    return jsonify({'message': '친구 추가 완료'}), 200
+
+@community_bp.route('/community/delete_friend_by_nickname', methods=['POST'])
+@jwt_required()
+def delete_friend_by_nickname():
+    uid = get_jwt_identity()
+    data = request.get_json()
+    nickname = data.get('nickname', '').strip()
+    if not nickname:
+        return jsonify({'error': '닉네임을 입력하세요.'}), 400
+    db = firestore.client()
+    users_ref = db.collection('users').stream()
+    friend_doc = None
+    for doc in users_ref:
+        user = doc.to_dict()
+        if 'nickname' in user and nickname == user['nickname']:
+            friend_doc = doc
+            break
+    if not friend_doc:
+        return jsonify({'error': '해당 닉네임의 사용자가 없습니다.'}), 404
+    friend_id = friend_doc.id
+    if uid == friend_id:
+        return jsonify({'error': '본인은 친구삭제 불가'}), 400
+    friend_ref = db.collection('users').document(uid).collection('friends').document(friend_id)
+    if not friend_ref.get().exists:
+        return jsonify({'error': '친구가 아닙니다.'}), 400
+    friend_ref.delete()
+    return jsonify({'message': '친구 삭제 완료'}), 200

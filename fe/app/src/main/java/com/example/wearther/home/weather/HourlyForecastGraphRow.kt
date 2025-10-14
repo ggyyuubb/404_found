@@ -17,11 +17,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.wearther.home.weather.HourlyWeather
 import java.time.Instant
 import java.time.ZoneId
 
@@ -49,12 +47,11 @@ fun HourlyForecastGraphRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                Color.White.copy(alpha = 0.15f), // ✨ 반투명 배경
+                Color.White.copy(alpha = 0.15f),
                 RoundedCornerShape(16.dp)
             )
             .padding(vertical = 8.dp)
     ) {
-        // ⬇️ 시간별 예보 + 강수량 UI
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(itemSpacingDp),
@@ -67,7 +64,7 @@ fun HourlyForecastGraphRow(
                     .atZone(ZoneId.of("Asia/Seoul"))
                 val hourText = "${forecastTime.hour}시"
                 val weatherMain = forecast.weather.firstOrNull()?.main ?: "Clear"
-                val iconRes = getWeatherIconRes(weatherMain) // 새로 추가한 함수 활용
+                val palette = getWeatherPalette(weatherMain)   // ✅ 팔레트
 
                 Column(
                     modifier = Modifier
@@ -82,11 +79,11 @@ fun HourlyForecastGraphRow(
                     )
                     Spacer(Modifier.height(4.dp))
 
-                    // 🔹 Flaticon 아이콘 교체
+                    // ✅ 날씨 아이콘 (팔레트 색상 적용)
                     Icon(
-                        painter = painterResource(id = iconRes),
+                        imageVector = weatherToEmoji(weatherMain),
                         contentDescription = "날씨 아이콘",
-                        tint = Color.Unspecified,
+                        tint = palette.iconColor,
                         modifier = Modifier.size(32.dp)
                     )
 
@@ -102,16 +99,26 @@ fun HourlyForecastGraphRow(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.height(48.dp)
                     ) {
-                        // 비 올 확률
-                        Text(
-                            text = "💧${(forecast.pop * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = sheetTextColor
-                        )
+                        // ✅ 비 올 확률
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val popPalette = getWeatherPalette("pop")
+                            Icon(
+                                imageVector = weatherToEmoji("pop"),
+                                contentDescription = "강수확률",
+                                tint = popPalette.iconColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${(forecast.pop * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = sheetTextColor
+                            )
+                        }
 
                         Spacer(Modifier.height(4.dp))
 
-                        // 강수량
+                        // ✅ 강수량
                         val isRainyWeather = weatherMain.lowercase() in listOf("rain", "drizzle", "thunderstorm", "snow")
                         if (isRainyWeather) {
                             val currentRain = forecast.rain?.oneHour ?: 0.0
@@ -120,11 +127,21 @@ fun HourlyForecastGraphRow(
                                 val nextRain = hourlyData.getOrNull(index + 1)?.rain?.oneHour ?: 0.0
                                 val totalRain = currentRain + prevRain + nextRain
 
-                                Text(
-                                    text = "🌧️${String.format("%.1f", totalRain)}mm",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = sheetTextColor
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val rainPalette = getWeatherPalette("rainamount")
+                                    Icon(
+                                        imageVector = weatherToEmoji("rainamount"),
+                                        contentDescription = "강수량",
+                                        tint = rainPalette.iconColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${String.format("%.1f", totalRain)}mm",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = sheetTextColor
+                                    )
+                                }
                             }
                         }
                     }

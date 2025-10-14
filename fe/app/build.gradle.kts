@@ -63,7 +63,7 @@ dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
-    implementation("androidx.activity:activity-compose:1.8.2") // 최신 버전 사용
+    implementation("androidx.activity:activity-compose:1.8.2")
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2023.08.00"))
@@ -71,9 +71,12 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.2.0")
-    implementation("androidx.compose.material:material-icons-extended:1.4.3")
+    implementation("androidx.compose.material:material-icons-extended") // ✅ 하나만 유지
     implementation("androidx.compose.runtime:runtime-livedata:1.5.4")
     implementation("androidx.navigation:navigation-compose:2.7.5")
+
+    // Lucide Icons for Jetpack Compose (Kotlin DSL)
+    implementation("com.composables:icons-lucide-android:1.1.0")
 
     // Firebase
     implementation("com.google.firebase:firebase-storage-ktx:20.3.0")

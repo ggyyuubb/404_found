@@ -7,14 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.wearther.R
 
 @Composable
 fun CurrentWeatherCard(data: WeatherResponse) {
     val todayTemps = data.daily?.firstOrNull()
+    val mainWeather = data.current.weather.firstOrNull()?.main ?: "clear"
+    val palette = getWeatherPalette(mainWeather)   // ✅ 팔레트 가져오기
 
     Card(
         modifier = Modifier
@@ -22,7 +22,7 @@ fun CurrentWeatherCard(data: WeatherResponse) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color.White.copy(alpha = 0.0f) // 투명도 20%
+            containerColor = Color.White.copy(alpha = 0.0f) // 투명
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -33,12 +33,10 @@ fun CurrentWeatherCard(data: WeatherResponse) {
             // 🔹 아이콘 + 현재 기온
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    painter = painterResource(
-                        id = getWeatherIconRes(data.current.weather.firstOrNull()?.main ?: "Clear")
-                    ),
+                    imageVector = weatherToEmoji(mainWeather),   // 중앙 아이콘 함수
                     contentDescription = "현재 날씨",
                     modifier = Modifier.size(80.dp),
-                    tint = Color.Unspecified
+                    tint = palette.iconColor                    // ✅ 팔레트 색상
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
@@ -64,31 +62,36 @@ fun CurrentWeatherCard(data: WeatherResponse) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(painter = painterResource(R.drawable.uv), contentDescription = "UV", tint = Color.Unspecified, modifier = Modifier.size(28.dp))
+                    val uvPalette = getWeatherPalette("uv")
+                    Icon(
+                        imageVector = weatherToEmoji("uv"),
+                        contentDescription = "UV",
+                        tint = uvPalette.iconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
                     Text("UV ${data.current.uvi.toInt()}")
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(painter = painterResource(R.drawable.humidity), contentDescription = "습도", tint = Color.Unspecified, modifier = Modifier.size(28.dp))
+                    val humidityPalette = getWeatherPalette("humidity")
+                    Icon(
+                        imageVector = weatherToEmoji("humidity"),
+                        contentDescription = "습도",
+                        tint = humidityPalette.iconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
                     Text("${data.current.humidity}%")
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(painter = painterResource(R.drawable.wind), contentDescription = "바람", tint = Color.Unspecified, modifier = Modifier.size(28.dp))
+                    val windPalette = getWeatherPalette("wind")
+                    Icon(
+                        imageVector = weatherToEmoji("wind"),
+                        contentDescription = "바람",
+                        tint = windPalette.iconColor,
+                        modifier = Modifier.size(28.dp)
+                    )
                     Text("${data.current.wind_speed} m/s")
                 }
             }
         }
-    }
-}
-
-fun getWeatherIconRes(main: String): Int {
-    return when (main.lowercase()) {
-        "clear" -> R.drawable.sun
-        "clouds" -> R.drawable.cloud_2
-        "rain" -> R.drawable.rain_2
-        "drizzle" -> R.drawable.rain_1
-        "thunderstorm" -> R.drawable.thunder
-        "snow" -> R.drawable.snow
-        "mist", "fog", "haze", "smoke", "dust" -> R.drawable.fog
-        else -> R.drawable.weather_unknown
     }
 }

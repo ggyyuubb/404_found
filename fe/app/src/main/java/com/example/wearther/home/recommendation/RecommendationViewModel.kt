@@ -14,6 +14,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
+import java.util.concurrent.TimeUnit
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import java.net.ConnectException
+import javax.net.ssl.SSLHandshakeException
+
 
 class RecommendationViewModel : ViewModel() {
 
@@ -38,9 +45,19 @@ class RecommendationViewModel : ViewModel() {
     val isLoading: StateFlow<Boolean> = _loading
 
     private val gson = Gson()
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor(
+            HttpLoggingInterceptor { msg -> Log.d("Net", msg) }
+                .apply { level = HttpLoggingInterceptor.Level.BODY }
+        )
+        .build()
 
     fun fetchRecommendations(jwt: String, city: String) {
+        val t0 = System.currentTimeMillis()
+
         viewModelScope.launch(Dispatchers.IO) {
             val safeCity = if (city.isBlank()) "Seoul" else city
             Log.d("RecoVM", "🚀 fetchRecommendations 시작 - city=$safeCity, jwt=${jwt.take(10)}...")
@@ -64,6 +81,7 @@ class RecommendationViewModel : ViewModel() {
                 Log.d("RecoVM", "📦 요청 Body: $safeCity")
 
                 val response = client.newCall(request).execute()
+
 
                 if (response.isSuccessful) {
                     val body = response.body?.string()
@@ -89,15 +107,21 @@ class RecommendationViewModel : ViewModel() {
                     _errorMessage.value = errorMsg
                     Log.e("RecoVM", "❌ $errorMsg")
                 }
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: "알 수 없는 오류"
-                _errorMessage.value = errorMsg
-                Log.e("RecoVM", "❌ 추천 불러오기 실패: $errorMsg", e)
-            } finally {
-                _loading.value = false
-                Log.d("RecoVM", "🔚 fetchRecommendations 종료 - loading=false")
+            } catch (e: SocketTimeoutException) {
+                val dt = System.currentTimeMillis() - t0
+                _errorMessage.value = "TIMEOUT"
+                Log.e("RecoVM", "TIMEOUT after ${dt}ms: ${e.message}")
+            } catch (e: UnknownHostException) {
+                _errorMessage.value = "DNS_FAIL"
+                Log.e("RecoVM", "DNS_FAIL: ${e.message}")
+            } catch (e: ConnectException) {
+                _errorMessage.value = "CONNECT_FAIL"
+                Log.e("RecoVM", "CONNECT_FAIL: ${e.message}")
+            } catch (e: SSLHandshakeException) {
+                _errorMessage.value = "TLS_FAIL"
+                Log.e("RecoVM", "TLS_FAIL: ${e.message}")
             }
-        }
+            }
     }
 
     // 🔹 새로 추가된 sendFeedback 함수

@@ -1,11 +1,9 @@
-// 📁 ui/components/WeeklyForecast.kt
-// ✅ 7일간 주간 날씨 예보를 표시하는 독립적인 Composable 컴포넌트입니다.
-// ✅ WeatherResponse의 daily 데이터를 받아서 카드 형태로 주간 예보를 렌더링합니다.
-
 package com.example.wearther.home.weather
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -84,7 +82,7 @@ private fun WeeklyForecastCard(
         else -> dayOfWeek
     }
 
-    val emoji = weatherToEmoji(day.weather.firstOrNull()?.main ?: "Clear")
+    val weatherIcon = weatherToEmoji(day.weather.firstOrNull()?.main ?: "Clear")
     val precipitationPercent = (day.pop * 100).toInt()
 
     Card(
@@ -106,7 +104,7 @@ private fun WeeklyForecastCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ✅ 왼쪽: 날짜
+            // ✅ 왼쪽: 날짜 + 강수확률
             Column {
                 Text(
                     text = displayDay,
@@ -116,19 +114,31 @@ private fun WeeklyForecastCard(
                     color = textColor
                 )
                 if (precipitationPercent > 0) {
-                    Text(
-                        text = "💧${precipitationPercent}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor.copy(alpha = 0.7f)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.WaterDrop,
+                            contentDescription = "강수확률",
+                            tint = textColor.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "$precipitationPercent%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textColor.copy(alpha = 0.7f)
+                        )
+                    }
                 }
             }
 
-            // ✅ 중앙: 날씨 이모지
-            Text(
-                text = emoji,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 8.dp)
+            // ✅ 중앙: 날씨 아이콘
+            Icon(
+                imageVector = weatherIcon,
+                contentDescription = "날씨 아이콘",
+                tint = Color.Unspecified,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .size(28.dp)
             )
 
             // ✅ 오른쪽: 온도 정보

@@ -10,63 +10,71 @@
         <input type="file" id="image" name="image" required /><br /><br />
         <button type="submit">업로드</button>
     </form>
-
     <div id="result" style="margin-top: 20px;"></div>
-    <div id="editSection" style="display:none; margin-top:20px;">
-        <h3>AI 분석 결과 (수정 가능)</h3>
-        <form id="editForm">
-            <label>의류 종류:
-                <select id="clothing_type" name="clothing_type"></select>
-            </label><br/><br/>
-            <label>소재:
-                <select id="material" name="material"></select>
-            </label><br/><br/>
-            <div>
-                <strong>색상:</strong><br/>
-                <div id="colorOptions"></div>
-            </div><br/>
-            <button type="submit">수정 후 저장</button>
-        </form>
-    </div>
 
     <script>
-        const categories = [
-            'blazer', 'cardigan', 'coat', 'cotton pants', 'denim', 'dress', 'hood',
-            'longpedding', 'longsleeve', 'shirt', 'shortpedding', 'shorts',
-            'shortsleeve', 'skirt', 'slacks', 'sleeveless', 'sweater', 'trainingpants',
-            'hoodzip', 'fleece', 'jumper'
-        ];
-        const colors = [
-            'Beige', 'Black', 'Blue', 'Brown', 'Gray', 'Green', 'Orange',
-            'Pink', 'Purple', 'Red', 'White', 'Yellow'
-        ];
-        const materials = [
-            '면','데님','니트','린넨/마','가죽','퍼/털','시폰/얇은 원단','실크/새틴',
-            '스판덱스/신축성 스포츠 원단','나일론/ 방수원단','울/정장소재','니트/스웨터소재',
-            '벨벳','트위드'
-        ];
+        // 카테고리 매핑 (영문 → 한글)
+        const categoryMap = {
+            'blazer': '블레이저',
+            'cardigan': '가디건',
+            'coat': '코트',
+            'cotton pants': '코튼 팬츠',
+            'denim': '데님',
+            'dress': '드레스',
+            'hood': '후드',
+            'longpedding': '롱패딩',
+            'longsleeve': '긴소매',
+            'shirt': '셔츠',
+            'shortpedding': '숏패딩',
+            'shorts': '반바지',
+            'shortsleeve': '반소매',
+            'skirt': '스커트',
+            'slacks': '슬랙스',
+            'sleeveless': '민소매',
+            'sweater': '스웨터',
+            'trainingpants': '트레이닝 팬츠',
+            'hoodzip': '후드집업',
+            'fleece': '플리스',
+            'jumper': '점퍼'
+        };
 
-        let lastImageId = null;
+        // 색상 매핑
+        const colorMap = {
+            'Beige': '베이지',
+            'Black': '검정',
+            'Blue': '파랑',
+            'Brown': '갈색',
+            'Gray': '회색',
+            'Green': '초록',
+            'Orange': '주황',
+            'Pink': '분홍',
+            'Purple': '보라',
+            'Red': '빨강',
+            'White': '하양',
+            'Yellow': '노랑'
+        };
 
-        function populateOptions(selectedCategory, selectedMaterial, selectedColors) {
-            const clothingSelect = document.getElementById("clothing_type");
-            clothingSelect.innerHTML = categories.map(c =>
-                `<option value="${c}" ${c===selectedCategory ? 'selected':''}>${c}</option>`
-            ).join("");
-
-            const materialSelect = document.getElementById("material");
-            materialSelect.innerHTML = materials.map(m =>
-                `<option value="${m}" ${m===selectedMaterial ? 'selected':''}>${m}</option>`
-            ).join("");
-
-            const colorOptions = document.getElementById("colorOptions");
-            colorOptions.innerHTML = colors.map(c =>
-                `<label><input type="checkbox" name="colors" value="${c}" ${selectedColors.includes(c)?'checked':''}/> ${c}</label><br/>`
-            ).join("");
-        }
+        // 소재 매핑
+        const materialMap = {
+            '면': '면',
+            '데님': '데님',
+            '니트': '니트',
+            '린넨/마': '린넨/마',
+            '가죽': '가죽',
+            '퍼/털': '퍼/털',
+            '시폰/얇은 원단': '시폰/얇은 원단',
+            '실크/새틴': '실크/새틴',
+            '스판덱스/신축성 스포츠 원단': '스판덱스/스포츠 원단',
+            '나일론/ 방수원단': '나일론/방수',
+            '울/정장소재': '울/정장소재',
+            '니트/스웨터소재': '니트/스웨터소재',
+            '벨벳': '벨벳',
+            '트위드': '트위드'
+        };
 
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
             const jwt = localStorage.getItem('jwt');
             if (!jwt) {
                 alert('로그인이 필요합니다.');
@@ -86,50 +94,59 @@
             const result = await response.json();
             const resultDiv = document.getElementById('result');
             if (response.ok) {
-                resultDiv.innerHTML = `<p>${result.message}</p><a href="${result.url}" target="_blank">이미지 보기</a>`;
+                resultDiv.innerHTML = `
+                    <p>Upload successful</p>
+                    <a href="${result.url}" target="_blank">이미지 보기</a>
+                    <h3>AI 분석 결과 (수정 가능)</h3>
+                    <form id="editForm">
+                        <label>의류 종류:
+                            <select name="clothing_type">
+                                ${Object.entries(categoryMap).map(([en, ko]) =>
+                                    `<option value="${en}" ${result.ai_result.clothing_type === en ? 'selected' : ''}>${ko}</option>`
+                                ).join('')}
+                            </select>
+                        </label>
+                        <br/>
+                        <label>소재:
+                            <select name="material">
+                                ${Object.entries(materialMap).map(([en, ko]) =>
+                                    `<option value="${en}" ${result.ai_result.material === en ? 'selected' : ''}>${ko}</option>`
+                                ).join('')}
+                            </select>
+                        </label>
+                        <br/>
+                        <label>색상:</label><br/>
+                        ${Object.entries(colorMap).map(([en, ko]) =>
+                            `<label><input type="checkbox" name="colors" value="${en}" ${result.ai_result.colors.includes(en) ? 'checked' : ''}/> ${ko}</label><br/>`
+                        ).join('')}
+                        <br/>
+                        <button type="submit">수정 후 저장</button>
+                    </form>
+                `;
 
-                if (result.ai_result) {
-                    populateOptions(
-                        result.ai_result.clothing_type || '',
-                        result.ai_result.material || '',
-                        result.ai_result.colors || []
-                    );
-                    document.getElementById('editSection').style.display = 'block';
-                }
-                lastImageId = result.id;
+                // 수정 저장 이벤트
+                document.getElementById('editForm').addEventListener('submit', async (ev) => {
+                    ev.preventDefault();
+                    const clothing_type = ev.target.clothing_type.value;
+                    const material = ev.target.material.value;
+                    const colors = Array.from(ev.target.querySelectorAll('input[name="colors"]:checked')).map(c => c.value);
+
+                    const saveRes = await fetch(`/upload/edit_image/${result.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': 'Bearer ' + jwt,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ clothing_type, material, colors })
+                    });
+                    if (saveRes.ok) {
+                        alert('수정 성공!');
+                    } else {
+                        alert('수정 실패');
+                    }
+                });
             } else {
-                resultDiv.innerHTML = `<p style="color: red;">${result.error || '업로드 실패'}</p>`;
-            }
-        });
-
-        document.getElementById('editForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!lastImageId) {
-                alert('수정할 이미지 ID를 찾을 수 없습니다.');
-                return;
-            }
-            const jwt = localStorage.getItem('jwt');
-            const clothing_type = document.getElementById('clothing_type').value;
-            const material = document.getElementById('material').value;
-            const colorsSelected = Array.from(document.querySelectorAll('input[name="colors"]:checked'))
-                                        .map(cb => cb.value);
-
-            const payload = { clothing_type, material, colors: colorsSelected };
-
-            const res = await fetch(`/upload/edit_image/${lastImageId}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': 'Bearer ' + jwt,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                alert('수정 성공!');
-            } else {
-                const error = await res.json();
-                alert('수정 실패: ' + (error.error || '알 수 없는 오류'));
+                resultDiv.innerHTML = `<p style="color: red;">${result.error}</p>`;
             }
         });
     </script>

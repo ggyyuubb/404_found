@@ -23,9 +23,10 @@ fun ClosetViewSwitcher(
     onDelete: (ClosetImage) -> Unit
 ) {
     var isGridView by remember { mutableStateOf(true) }
+    var selectedItem by remember { mutableStateOf<ClosetImage?>(null) }
 
     Column {
-        // 🔘 뷰 전환 버튼
+        // 뷰 전환 버튼
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End
@@ -40,9 +41,9 @@ fun ClosetViewSwitcher(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 📌 뷰 전환
+        // 뷰 전환
         if (isGridView) {
-            // 🟦 2열 그리드
+            // 2열 그리드
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
@@ -55,13 +56,14 @@ fun ClosetViewSwitcher(
                 items(items) { item ->
                     ItemCard(
                         imageUrl = item.url,
-                        category = item.category,
+                        clothingType = item.clothing_type,
+                        onClick = { selectedItem = item },
                         onDelete = { onDelete(item) }
                     )
                 }
             }
         } else {
-            // 🟩 1열 리스트
+            // 1열 리스트
             LazyColumn(
                 modifier = Modifier
                     .padding(16.dp)
@@ -72,11 +74,24 @@ fun ClosetViewSwitcher(
                 items(items) { item ->
                     ItemCard(
                         imageUrl = item.url,
-                        category = item.category,
+                        clothingType = item.clothing_type,
+                        onClick = { selectedItem = item },
                         onDelete = { onDelete(item) }
                     )
                 }
             }
         }
+    }
+
+    // 상세 다이얼로그
+    selectedItem?.let { item ->
+        ClothingDetailDialog(
+            item = item,
+            onDismiss = { selectedItem = null },
+            onDelete = {
+                onDelete(item)
+                selectedItem = null
+            }
+        )
     }
 }

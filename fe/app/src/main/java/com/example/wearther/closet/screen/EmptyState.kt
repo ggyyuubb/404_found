@@ -1,4 +1,4 @@
-package com.example.wearther.ui.screens.closet.components
+package com.example.wearther.closet.screen
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
