@@ -109,6 +109,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("com.google.android.material:material:1.10.0")
+    implementation("androidx.compose.material3:material3:1.2.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

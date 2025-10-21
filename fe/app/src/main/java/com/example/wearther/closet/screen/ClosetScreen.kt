@@ -21,18 +21,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.example.wearther.closet.data.ClosetApi
 import com.example.wearther.closet.data.ClosetImage
-import com.example.wearther.closet.data.ItemCard
-import com.example.wearther.closet.screen.ClothingDetailDialog
-import com.example.wearther.closet.upload.PhotoSourceSelectionDialog
+import com.example.wearther.closet.data.ClosetViewModel
+import com.example.wearther.closet.data.ClosetViewModelFactory
+import com.example.wearther.closet.data.ClosetSortUtils
+import com.example.wearther.closet.upload.UpdateClothingRequest
 import com.example.wearther.remote.BASE_URL
 import com.example.wearther.remote.getStoredJwtToken
 import com.example.wearther.ui.screens.closet.components.CategoryTabs
-import com.example.wearther.ui.screens.closet.components.CategoryMapper
 import com.example.wearther.ui.screens.closet.components.Header
-import com.example.wearther.ui.screens.closet.components.SortOption
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -49,110 +48,45 @@ fun ClosetScreen(
     val jwtToken = getStoredJwtToken(context)
     val tokenHeader = "Bearer $jwtToken"
 
+    // ✅ Retrofit 인스턴스 생성
     val retrofit = remember {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
-    val closetApi = retrofit.create(ClosetApi::class.java)
+    val closetApi = retrofit.create(com.example.wearther.closet.data.ClosetApi::class.java)
 
-    var activeCategory by remember { mutableStateOf("전체") }
-    var activeSubCategory by remember { mutableStateOf("전체") }
-    var allItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
-    var filteredItems by remember { mutableStateOf<List<ClosetImage>>(emptyList()) }
-    var currentSortOption by remember { mutableStateOf(SortOption.CATEGORY) }
+    // ✅ ViewModel 생성
+    val viewModel: ClosetViewModel = viewModel(
+        factory = ClosetViewModelFactory(closetApi, tokenHeader)
+    )
+
+    // ✅ State 구독
+    val filteredItems by viewModel.filteredItems.collectAsState()
+    val activeCategory by viewModel.activeCategory.collectAsState()
+    val activeSubCategory by viewModel.activeSubCategory.collectAsState()
+    val currentSortOption by viewModel.currentSortOption.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    // ✅ UI State (ViewModel에 없는 것들)
     var isGridView by remember { mutableStateOf(true) }
     var selectedItem by remember { mutableStateOf<ClosetImage?>(null) }
-
     var showDeleteDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<ClosetImage?>(null) }
+    var showPhotoDialog by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
-
-    fun applyFiltering(type: String, subCategory: String) {
-        val baseFiltered = if (subCategory == "전체") {
-            // 서브카테고리가 "전체"일 때
-            if (type == "전체") {
-                allItems  // 대분류도 "전체" → 모든 아이템
-            } else {
-                // 대분류만 선택 (상의/하의/아우터/원피스)
-                allItems.filter { item ->
-                    val koreanCategory = CategoryMapper.toKorean(item.clothing_type)
-
-                    when (type) {
-                        "상의" -> koreanCategory in listOf("민소매", "반소매", "긴소매", "후드", "셔츠", "스웨터")
-                        "하의" -> koreanCategory in listOf("면바지", "데님", "트레이닝팬츠", "슬랙스", "반바지", "스커트")
-                        "아우터" -> koreanCategory in listOf("블레이저", "가디건", "코트", "롱패딩", "숏패딩", "후드집업", "플리스", "점퍼")
-                        "원피스" -> koreanCategory == "원피스"
-                        else -> true
-                    }
-                }
-            }
-        } else {
-            // 서브카테고리 선택 시 (민소매, 반소매 등)
-            allItems.filter { item ->
-                val koreanCategory = CategoryMapper.toKorean(item.clothing_type)
-                koreanCategory == subCategory
-            }
-        }
-
-        filteredItems = ClosetSortUtils.sortItems(baseFiltered, currentSortOption)
-        Log.d("ClosetScreen", "필터링 완료: type=$type, sub=$subCategory, 전체=${allItems.size}, 필터=${baseFiltered.size}")
-    }
-
-    fun fetchClosetImages(type: String) {
-        coroutineScope.launch {
-            try {
-                Log.e("JWT_CHECK", "현재 JWT: $jwtToken")
-                Log.e("JWT_CHECK", "토큰 헤더: $tokenHeader")
-
-                val response = closetApi.getMyImages(
-                    token = tokenHeader,
-                    type = if (type == "전체") null else type,
-                    category = null
-                )
-                Log.d("ClosetScreen", "받아온 이미지 개수: ${response.images.size}")
-
-                response.images.forEach { item ->
-                    Log.d("ClosetScreen", "ID: ${item.id}, clothing_type: '${item.clothing_type}'")
-                }
-
-                allItems = response.images
-                applyFiltering(type, activeSubCategory)
-            } catch (e: Exception) {
-                Log.e("ClosetScreen", "옷장 가져오기 실패: ${e.message}")
-            }
-        }
-    }
-
-    fun deleteImage(id: String) {
-        coroutineScope.launch {
-            try {
-                closetApi.deleteImage(tokenHeader, id)
-                fetchClosetImages(activeCategory)
-            } catch (e: Exception) {
-                Log.e("ClosetScreen", "삭제 실패: ${e.message}")
-            }
-        }
-    }
-
-    val onSortChange = { newSortOption: SortOption ->
-        currentSortOption = newSortOption
-        applyFiltering(activeCategory, activeSubCategory)
-    }
-
-    val requestDelete = { item: ClosetImage ->
-        itemToDelete = item
-        showDeleteDialog = true
-    }
-
-    LaunchedEffect(Unit) {
-        fetchClosetImages(activeCategory)
-    }
-
     val topCategories = listOf("전체", "상의", "하의", "아우터", "원피스")
-    var showPhotoDialog by remember { mutableStateOf(false) }
+
+    // ✅ 에러 표시
+    error?.let { errorMessage ->
+        LaunchedEffect(errorMessage) {
+            Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+            viewModel.clearError()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -170,84 +104,105 @@ fun ClosetScreen(
                     )
                 )
         ) {
+            // ✅ 카테고리 탭
             CategoryTabs(
                 categories = topCategories,
                 activeCategory = activeCategory,
-                onCategoryChange = {
-                    activeCategory = it
-                    activeSubCategory = "전체"
-                    fetchClosetImages(it)
-                },
+                onCategoryChange = { viewModel.setCategory(it) },
                 activeSubCategory = activeSubCategory,
-                onSubCategoryChange = {
-                    activeSubCategory = it
-                    applyFiltering(activeCategory, it)
-                }
+                onSubCategoryChange = { viewModel.setSubCategory(it) }
             )
 
+            // ✅ 헤더 (정렬, 뷰 전환)
             Header(
                 totalItems = filteredItems.size,
                 currentSortOption = currentSortOption,
-                onSortChange = onSortChange,
+                onSortChange = { viewModel.setSortOption(it) },
                 isGridView = isGridView,
                 onToggleView = { isGridView = !isGridView }
             )
 
-            if (filteredItems.isEmpty()) {
+            // ✅ 로딩 표시
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            // ✅ 빈 상태
+            else if (filteredItems.isEmpty()) {
                 EmptyState()
-            } else {
-                if (isGridView) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 16.dp)
-                            .fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 10.dp)
-                    ) {
-                        items(filteredItems) { item ->
-                            ItemCard(
-                                imageUrl = item.url,
-                                clothingType = item.clothing_type,
-                                onClick = { selectedItem = item },
-                                onDelete = { requestDelete(item) }
-                            )
-                        }
+            } else if (isGridView) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    items(filteredItems) { item ->
+                        val subKo = ClosetSortUtils.toKorean(item.category)
+                        val mainKo = ClosetSortUtils.getMainCategory(subKo)
+                        com.example.wearther.closet.screen.ItemCard(
+                            imageUrl = item.url,
+                            bigCategory = mainKo,
+                            subCategory = subKo,
+                            colorNames = item.colors,
+                            onClick = { selectedItem = item },
+                            onDelete = {
+                                itemToDelete = item
+                                showDeleteDialog = true
+                            }
+                        )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(bottom = 1.dp)
-                    ) {
-                        items(filteredItems) { item ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color.White, shape = MaterialTheme.shapes.medium)
-                                    .padding(8.dp)
-                            ) {
-                                AsyncImage(
-                                    model = item.url,
-                                    contentDescription = "옷 이미지",
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .background(Color.LightGray, shape = MaterialTheme.shapes.small)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
+                }
+            }
+            // ✅ 리스트 뷰
+            else {
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    items(filteredItems) { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                        ) {
+                            AsyncImage(
+                                model = item.url,
+                                contentDescription = "옷 이미지",
+                                modifier = Modifier.size(80.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
                                 Text(
-                                    text = CategoryMapper.toKorean(item.clothing_type),
-                                    fontWeight = FontWeight.SemiBold,
+                                    text = item.type ?: "미분류",
+                                    fontWeight = FontWeight.Bold,
                                     color = Color.Black
                                 )
-                                Spacer(modifier = Modifier.weight(1f))
-                                TextButton(onClick = { requestDelete(item) }) {
-                                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                                Text(
+                                    text = ClosetSortUtils.toKorean(item.category),
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color.Gray
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            TextButton(
+                                onClick = {
+                                    itemToDelete = item
+                                    showDeleteDialog = true
                                 }
+                            ) {
+                                Text("삭제", color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -255,6 +210,7 @@ fun ClosetScreen(
             }
         }
 
+        // ✅ FAB (옷 추가)
         FloatingActionButton(
             onClick = { showPhotoDialog = true },
             modifier = Modifier
@@ -267,79 +223,33 @@ fun ClosetScreen(
         }
     }
 
-    // ===== 기존 코드 (주석 처리) =====
-    /*
+    // ✅ 사진 선택 다이얼로그
     if (showPhotoDialog) {
-        PhotoSourceSelectionDialog(
+        com.example.wearther.closet.upload.PhotoSourceSelectionDialog(
             onDismiss = { showPhotoDialog = false },
             onImageSelected = { uri ->
-                showPhotoDialog = false
-                onNavigateToUpload(uri)
-            }
-        )
-    }
-    */
-
-    // ===== 임시 테스트: AI 자동 분류 업로드 =====
-    if (showPhotoDialog) {
-        PhotoSourceSelectionDialog(
-            onDismiss = { showPhotoDialog = false },
-            onImageSelected = { uri ->
-                Log.e("UPLOAD_DEBUG", "========== 이미지 선택됨 ==========")
-                Log.e("UPLOAD_DEBUG", "선택된 URI: $uri")
-
                 showPhotoDialog = false
                 coroutineScope.launch {
                     try {
-                        Log.e("UPLOAD_DEBUG", "JWT 토큰: $jwtToken")
-                        Log.e("UPLOAD_DEBUG", "토큰 헤더: $tokenHeader")
-
                         val file = uriToFile(context, uri)
-                        Log.e("UPLOAD_DEBUG", "파일 생성 완료: ${file.name}, 크기: ${file.length()} bytes")
-
                         val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                         val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
-                        Log.e("UPLOAD_DEBUG", "MultipartBody 생성 완료")
 
                         Toast.makeText(context, "AI 분석 중...", Toast.LENGTH_SHORT).show()
 
-                        val uploadRetrofit = Retrofit.Builder()
-                            .baseUrl(BASE_URL)
-                            .addConverterFactory(GsonConverterFactory.create())
-                            .build()
-                        val uploadApi = uploadRetrofit.create(com.example.wearther.closet.upload.UploadApi::class.java)
-
-                        Log.e("UPLOAD_DEBUG", "API 호출 시작 - BASE_URL: $BASE_URL")
-
+                        val uploadApi = retrofit.create(com.example.wearther.closet.upload.UploadApi::class.java)
                         val response = uploadApi.uploadImage(
                             token = tokenHeader,
                             image = imagePart
                         )
 
-                        Log.e("UPLOAD_DEBUG", "✅ API 호출 성공!")
-                        Log.e("UPLOAD_DEBUG", "응답 메시지: ${response.message}")
-                        Log.e("UPLOAD_DEBUG", "응답 ID: ${response.id}")
-                        Log.e("UPLOAD_DEBUG", "응답 URL: ${response.url}")
-                        Log.e("UPLOAD_DEBUG", "AI 결과 존재 여부: ${response.ai_result != null}")
-
                         file.delete()
 
-                        Log.d("AI자동분류", "========================================")
-                        Log.d("AI자동분류", "옷 종류: ${response.ai_result?.clothing_type}")
-                        Log.d("AI자동분류", "색상: ${response.ai_result?.colors}")
-                        Log.d("AI자동분류", "재질: ${response.ai_result?.material}")
-                        Log.d("AI자동분류", "적정 온도: ${response.ai_result?.suitable_temperature}")
-                        Log.d("AI자동분류", "========================================")
-
                         Toast.makeText(context, "AI가 자동으로 분류 완료!", Toast.LENGTH_SHORT).show()
-                        fetchClosetImages(activeCategory)
+                        viewModel.fetchClosetImages()
 
                     } catch (e: Exception) {
-                        Log.e("UPLOAD_DEBUG", "❌❌❌ 업로드 실패 ❌❌❌")
-                        Log.e("UPLOAD_DEBUG", "에러 메시지: ${e.message}")
-                        Log.e("UPLOAD_DEBUG", "에러 타입: ${e.javaClass.simpleName}")
-                        e.printStackTrace()
-
+                        Log.e("ClosetScreen", "업로드 실패", e)
                         Toast.makeText(context, "업로드 실패: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -347,43 +257,50 @@ fun ClosetScreen(
         )
     }
 
+    // ✅ 상세 정보 다이얼로그 - 수정 기능 연결
     selectedItem?.let { item ->
         ClothingDetailDialog(
             item = item,
             onDismiss = { selectedItem = null },
             onDelete = {
-                deleteImage(item.id)
-                selectedItem = null
-            },
-            onUpdate = { clothingType, colors, material, temperature ->
-                coroutineScope.launch {
-                    try {
-                        val uploadRetrofit = Retrofit.Builder()
-                            .baseUrl(BASE_URL)
-                            .addConverterFactory(GsonConverterFactory.create())
-                            .build()
-                        val uploadApi = uploadRetrofit.create(com.example.wearther.closet.upload.UploadApi::class.java)
-
-                        uploadApi.updateClothing(
-                            token = tokenHeader,
-                            imageId = item.id,
-                            clothingType = clothingType,
-                            material = material,
-                            suitableTemperature = temperature
-                        )
-
-                        Toast.makeText(context, "정보가 업데이트되었습니다!", Toast.LENGTH_SHORT).show()
-                        fetchClosetImages(activeCategory)
+                viewModel.deleteImage(
+                    imageId = item.id,
+                    onSuccess = {
                         selectedItem = null
-                    } catch (e: Exception) {
-                        Log.e("UpdateClothing", "업데이트 실패: ${e.message}", e)
-                        Toast.makeText(context, "업데이트 실패: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "삭제되었습니다", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { error ->
+                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
                     }
-                }
+                )
+            },
+            // ✅ 수정 기능 - ViewModel의 updateImage() 사용
+            onUpdate = { categoryEn, colorsEn, material, temperature ->
+                Log.d("ClosetScreen", "========== 수정 시작 ==========")
+                Log.d("ClosetScreen", "categoryEn: $categoryEn")
+                Log.d("ClosetScreen", "colorsEn: $colorsEn")
+                Log.d("ClosetScreen", "material: $material")
+                Log.d("ClosetScreen", "temperature: $temperature")
+
+                viewModel.updateImage(
+                    imageId = item.id,
+                    category = categoryEn,      // 영문 세부 카테고리
+                    colors = colorsEn,          // 영문 색상 배열 ["Blue", "Gray"]
+                    material = material,
+                    temperature = temperature,
+                    onSuccess = {
+                        selectedItem = null
+                        Toast.makeText(context, "정보가 업데이트되었습니다!", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { errorMsg ->
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                    }
+                )
             }
         )
     }
 
+    // ✅ 삭제 확인 다이얼로그
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -395,7 +312,17 @@ fun ClosetScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        itemToDelete?.let { deleteImage(it.id) }
+                        itemToDelete?.let { item ->
+                            viewModel.deleteImage(
+                                imageId = item.id,
+                                onSuccess = {
+                                    Toast.makeText(context, "삭제되었습니다", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { error ->
+                                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
                         showDeleteDialog = false
                         itemToDelete = null
                     },

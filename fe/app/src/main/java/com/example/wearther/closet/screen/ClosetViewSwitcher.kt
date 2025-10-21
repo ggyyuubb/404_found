@@ -15,7 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.wearther.closet.data.ClosetImage
-import com.example.wearther.closet.data.ItemCard
+import com.example.wearther.closet.data.ClosetSortUtils   // ✅ 하위 카테고리 한글화
 
 @Composable
 fun ClosetViewSwitcher(
@@ -54,9 +54,12 @@ fun ClosetViewSwitcher(
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(items) { item ->
+                    // ✅ ItemCard 시그니처에 맞게 수정
                     ItemCard(
-                        imageUrl = item.url,
-                        clothingType = item.clothing_type,
+                        imageUrl    = item.url,
+                        bigCategory = item.type?.takeIf { it.isNotBlank() },
+                        subCategory = item.category?.let { ClosetSortUtils.toKorean(it) },
+                        // colorName = item.color,  // 모델에 색상 이름 필드가 생기면 주석 해제
                         onClick = { selectedItem = item },
                         onDelete = { onDelete(item) }
                     )
@@ -72,13 +75,21 @@ fun ClosetViewSwitcher(
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(items) { item ->
+                    // ✅ 영어 세부카테고리 → 한글
+                    val subKo  = ClosetSortUtils.toKorean(item.category)
+                    // ✅ 한글 세부카테고리 → 대분류
+                    val mainKo = ClosetSortUtils.getMainCategory(subKo)
+
                     ItemCard(
-                        imageUrl = item.url,
-                        clothingType = item.clothing_type,
+                        imageUrl    = item.url,
+                        bigCategory = mainKo,          // ← 재계산된 대분류
+                        subCategory = subKo,           // ← 한글 세부카테고리
+                        colorNames  = item.colors,     // ← 색상 리스트가 있으면 스와치 표시 (없으면 생략 가능)
                         onClick = { selectedItem = item },
                         onDelete = { onDelete(item) }
                     )
                 }
+
             }
         }
     }

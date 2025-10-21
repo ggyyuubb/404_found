@@ -177,6 +177,7 @@ def get_posts():
     all_posts = []
     uid = None
     user_age_group = None
+    blocked_ids = set()
     try:
         uid = get_jwt_identity()
     except Exception:
@@ -187,14 +188,17 @@ def get_posts():
         user_doc = db.collection('users').document(uid).get()
         if user_doc.exists:
             user_age_group = user_doc.to_dict().get('age_group')
-
-    print("현재 로그인 uid:", uid)
-    print("현재 사용자 나이대:", user_age_group)
+        # 차단한 사용자 목록 가져오기
+        blocked_ref = db.collection('users').document(uid).collection('blocked_users')
+        blocked_ids = {doc.id for doc in blocked_ref.stream()}
 
     # 전체 게시물 가져오기
     for doc in posts_ref.stream():
         post = doc.to_dict()
         post['id'] = doc.id
+        # 차단한 사용자의 게시물은 제외
+        if uid and post.get('user_id') in blocked_ids:
+            continue
         likes = post.get('likes', [])
         post['likes_count'] = len(likes)
         post['liked_by_me'] = uid in likes if uid else False
@@ -223,7 +227,6 @@ def get_posts():
     if uid:
         friends_ref = db.collection('users').document(uid).collection('friends')
         friend_ids = {f.to_dict().get('user_id') for f in friends_ref.stream() if f.to_dict().get('user_id')}
-    print("친구 목록 friend_ids:", friend_ids)
 
     # 본인+친구 게시물과 나머지 게시물 분리
     priority_posts = []
@@ -261,19 +264,39 @@ def profile_page(user_id):
     db = firestore.client()
     user_doc = db.collection('users').document(user_id).get()
     if not user_doc.exists:
-        return jsonify({'error': '사용자 없음'}), 404
+        return render_template('community_profile.html', error='사용자 없음')
     user = user_doc.to_dict()
     created_at = user.get('created_at')
     if hasattr(created_at, 'strftime'):
         created_at = created_at.strftime('%Y-%m-%d %H:%M:%S')
-    # 필요한 프로필 정보만 반환
-    return jsonify({
-        'user_id': user_id,
-        'nickname': user.get('nickname', ''),
-        'profile_image': user.get('profile_image', ''),
-        'age_group': user.get('age_group', ''),
-        'email': user.get('email', ''),
-    }), 200
+    # 친구 목록
+    friends_ref = db.collection('users').document(user_id).collection('friends')
+    friends = [f.to_dict() for f in friends_ref.stream()]
+    # 게시물 목록
+    posts_ref = db.collection('community_posts').where('user_id', '==', user_id).order_by('created_at', direction=firestore.Query.DESCENDING)
+    posts = []
+    for doc in posts_ref.stream():
+        post = doc.to_dict()
+        post['created_at'] = post.get('created_at')
+        posts.append(post)
+    # 로그인 사용자 정보
+    current_user_id = None
+    is_blocked = False
+    try:
+        current_user_id = get_jwt_identity()
+        if current_user_id:
+            blocked_ref = db.collection('users').document(current_user_id).collection('blocked_users').document(user_id)
+            is_blocked = blocked_ref.get().exists
+    except Exception:
+        pass
+    return render_template(
+        'community_profile.html',
+        user={**user, 'user_id': user_id, 'created_at': created_at},
+        friends=friends,
+        posts=posts,
+        current_user_id=current_user_id,
+        is_blocked=is_blocked
+    )
 
 @community_bp.route('/community/posts/<post_id>/share', methods=['POST'])
 @jwt_required()
@@ -309,6 +332,7 @@ def search_friend():
         user = doc.to_dict()
         if 'nickname' in user and keyword in user['nickname']:
             user['user_id'] = doc.id
+            user['profile_image'] = user.get('profile_image', '')
             results.append(user)
     return jsonify({'results': results}), 200
 
@@ -371,3 +395,31 @@ def delete_friend_by_nickname():
         return jsonify({'error': '친구가 아닙니다.'}), 400
     friend_ref.delete()
     return jsonify({'message': '친구 삭제 완료'}), 200
+
+@community_bp.route('/community/block_user', methods=['POST'])
+@jwt_required()
+def block_user():
+    uid = get_jwt_identity()
+    data = request.get_json()
+    block_user_id = data.get('user_id', '').strip()
+    if not block_user_id:
+        return jsonify({'error': '차단할 사용자 ID가 필요합니다.'}), 400
+    if uid == block_user_id:
+        return jsonify({'error': '본인 계정은 차단할 수 없습니다.'}), 400
+    db = firestore.client()
+    block_ref = db.collection('users').document(uid).collection('blocked_users').document(block_user_id)
+    block_ref.set({'blocked_at': datetime.utcnow()})
+    return jsonify({'message': '계정 차단 완료'}), 200
+
+@community_bp.route('/community/unblock_user', methods=['POST'])
+@jwt_required()
+def unblock_user():
+    uid = get_jwt_identity()
+    data = request.get_json()
+    unblock_user_id = data.get('user_id', '').strip()
+    if not unblock_user_id:
+        return jsonify({'error': '차단 해제할 사용자 ID가 필요합니다.'}), 400
+    db = firestore.client()
+    block_ref = db.collection('users').document(uid).collection('blocked_users').document(unblock_user_id)
+    block_ref.delete()
+    return jsonify({'message': '계정 차단 해제 완료'}), 200

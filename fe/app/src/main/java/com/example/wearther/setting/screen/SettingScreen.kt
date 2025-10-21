@@ -33,33 +33,50 @@ fun SettingScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
 
-    // ✅ Google 로그인 런처 등록
+    // ✅ 프로필 사진 URL 상태 추가
+    var photoUrl by remember { mutableStateOf<String?>(null) }
+
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         GoogleSignInHelper.handleSignInResult(activity, result) {
-            // 로그인 성공 후 처리: user 상태 업데이트
             user = FirebaseAuth.getInstance().currentUser
+            // ✅ 로그인 후 프로필 사진도 업데이트
+            photoUrl = user?.photoUrl?.toString()
             Log.d("GoogleLogin", "🎉 구글 로그인 성공 후 UI 업데이트")
         }
     }
 
-    // ✅ 런처를 GoogleSignInHelper에 등록
     LaunchedEffect(Unit) {
         GoogleSignInHelper.setLauncher(googleSignInLauncher)
         Log.d("GoogleLogin", "✅ Google 로그인 런처 등록 완료")
     }
 
-    // ✅ 로그인된 사용자의 Firestore 닉네임 불러오기
+    // ✅ 로그인된 사용자의 Firestore 데이터 불러오기 (닉네임 + 프로필 사진)
     LaunchedEffect(user) {
-        user?.let {
-            Firebase.firestore.collection("users").document(it.uid)
+        user?.let { currentUser ->
+            // Firebase Auth의 photoUrl 먼저 설정
+            photoUrl = currentUser.photoUrl?.toString()
+            Log.d("SettingScreen", "Firebase Auth photoUrl: $photoUrl")
+
+            // Firestore에서 저장된 프로필 사진이 있는지 확인
+            Firebase.firestore.collection("users").document(currentUser.uid)
                 .get()
                 .addOnSuccessListener { doc ->
                     nickname = doc.getString("nickname")
-                        ?: it.displayName
-                                ?: it.email
+                        ?: currentUser.displayName
+                                ?: currentUser.email
                                 ?: "사용자"
+
+                    // ✅ Firestore에 저장된 프로필 사진 URL이 있으면 우선 사용
+                    val firestorePhotoUrl = doc.getString("profile_image")
+                    if (!firestorePhotoUrl.isNullOrEmpty()) {
+                        photoUrl = firestorePhotoUrl
+                        Log.d("SettingScreen", "Firestore photoUrl: $firestorePhotoUrl")
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("SettingScreen", "Firestore 데이터 로드 실패", e)
                 }
         }
     }
@@ -76,44 +93,48 @@ fun SettingScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(24.dp))
 
         if (user != null) {
-            // ProfileRepository 추가
             val profileRepository = remember { ProfileRepository(context) }
+
+            Log.d("SettingScreen", "ProfileScreen에 전달할 photoUrl: $photoUrl")
 
             ProfileScreen(
                 displayName = "$nickname 님",
-                photoUrl = user?.photoUrl?.toString(),
+                photoUrl = photoUrl, // ✅ 상태로 관리되는 photoUrl 전달
                 email = user?.email ?: user?.displayName ?: "사용자",
                 onPhotoUrlChanged = { newUrl ->
-                    Log.d("ProfileScreen", "새 프로필 사진 URL: $newUrl")
-                    // Firestore에도 업데이트
+                    Log.d("SettingScreen", "🖼️ 새 프로필 사진 URL 받음: $newUrl")
+
+                    // ✅ UI 즉시 업데이트
+                    photoUrl = newUrl
+
+                    // Firestore에도 저장
                     user?.let { currentUser ->
                         Firebase.firestore.collection("users").document(currentUser.uid)
                             .update("profile_image", newUrl)
                             .addOnSuccessListener {
-                                Log.d("ProfileScreen", "Firestore 프로필 이미지 업데이트 성공")
+                                Log.d("SettingScreen", "✅ Firestore 프로필 이미지 업데이트 성공")
                             }
                             .addOnFailureListener { e ->
-                                Log.e("ProfileScreen", "Firestore 업데이트 실패", e)
+                                Log.e("SettingScreen", "❌ Firestore 업데이트 실패", e)
                             }
                     }
                 },
-                // SettingScreen.kt의 uploadPhotoFile 부분 수정
                 uploadPhotoFile = { file ->
                     try {
-                        Log.d("ProfileScreen", "JWT 토큰 테스트 시작")
+                        Log.d("SettingScreen", "🔐 JWT 토큰 테스트 시작")
                         val isValidToken = profileRepository.testJwtToken()
 
                         if (!isValidToken) {
-                            Log.e("ProfileScreen", "JWT 토큰이 유효하지 않음")
+                            Log.e("SettingScreen", "❌ JWT 토큰이 유효하지 않음")
                             throw IllegalStateException("로그인이 만료되었습니다. 다시 로그인해주세요.")
                         }
 
-                        Log.d("ProfileScreen", "JWT 토큰 유효, 파일 업로드 시작: ${file.name}")
+                        Log.d("SettingScreen", "✅ JWT 토큰 유효, 파일 업로드 시작: ${file.name}")
                         val url = profileRepository.uploadPhoto(file)
-                        Log.d("ProfileScreen", "파일 업로드 성공: $url")
+                        Log.d("SettingScreen", "✅ 파일 업로드 성공: $url")
                         url
                     } catch (e: Exception) {
-                        Log.e("ProfileScreen", "파일 업로드 실패", e)
+                        Log.e("SettingScreen", "❌ 파일 업로드 실패", e)
                         throw e
                     }
                 }
@@ -148,6 +169,7 @@ fun SettingScreen(navController: NavController) {
                 onClick = {
                     auth.signOut()
                     user = null
+                    photoUrl = null // ✅ 로그아웃 시 프로필 사진도 초기화
                     Log.d("Login", "✅ 로그아웃 완료")
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -173,7 +195,11 @@ fun SettingScreen(navController: NavController) {
                         password = password,
                         context = context,
                         navController = navController,
-                        onUserUpdated = { user = it }
+                        onUserUpdated = {
+                            user = it
+                            // ✅ 이메일 로그인 후 프로필 사진도 로드
+                            photoUrl = it?.photoUrl?.toString()
+                        }
                     )
                 }
             )

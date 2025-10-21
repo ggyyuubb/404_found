@@ -24,14 +24,24 @@ fun WeeklyForecast(
         modifier = modifier
     ) {
         // ✅ 섹션 제목
-        Text(
-            text = "📅 7일간 날씨 예보",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = textColor,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CalendarMonth,
+                contentDescription = null,
+                tint = textColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "주간 날씨",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = textColor
+            )
+        }
 
-        // ✅ 데이터 없을 때 에러 메시지
         if (dailyWeather.isNullOrEmpty()) {
             Card(
                 modifier = Modifier
@@ -39,17 +49,17 @@ fun WeeklyForecast(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+                ),
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Text(
-                    text = "주간 예보 데이터를 불러올 수 없습니다.\nAPI 설정을 확인해주세요.",
+                    text = "날씨 정보를 불러올 수 없습니다",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(20.dp)
                 )
             }
         } else {
-            // ✅ 주간 예보 카드들
             dailyWeather.take(7).forEachIndexed { index, day ->
                 WeeklyForecastCard(
                     day = day,
@@ -59,7 +69,6 @@ fun WeeklyForecast(
             }
         }
 
-        // ✅ 바텀시트와 겹치지 않도록 여유 공간
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
@@ -73,8 +82,7 @@ private fun WeeklyForecastCard(
     val dayOfWeek = Instant.ofEpochSecond(day.dt)
         .atZone(ZoneId.of("Asia/Seoul"))
         .dayOfWeek
-        .toString()
-        .substring(0, 3)
+        .getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.KOREAN)
 
     val displayDay = when (index) {
         0 -> "오늘"
@@ -88,72 +96,103 @@ private fun WeeklyForecastCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         colors = CardDefaults.cardColors(
             containerColor = when (index) {
-                0 -> MaterialTheme.colorScheme.primaryContainer // 오늘 강조
-                else -> MaterialTheme.colorScheme.surfaceVariant
+                0 -> textColor.copy(alpha = 0.08f) // 오늘 은은하게 강조
+                else -> textColor.copy(alpha = 0.03f)
             }
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp // ✅ 그림자 제거
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ✅ 왼쪽: 날짜 + 강수확률
-            Column {
-                Text(
-                    text = displayDay,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Normal
-                    ),
-                    color = textColor
-                )
-                if (precipitationPercent > 0) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.WaterDrop,
-                            contentDescription = "강수확률",
-                            tint = textColor.copy(alpha = 0.7f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "$precipitationPercent%",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.7f)
-                        )
+            // ✅ 왼쪽: 날짜
+            Text(
+                text = displayDay,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = if (index == 0) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = textColor,
+                modifier = Modifier.width(60.dp)
+            )
+
+            // ✅ 중앙: 날씨 아이콘 + 강수확률 (고정 너비로 정렬)
+            Box(
+                modifier = Modifier.width(120.dp), // ✅ 고정 너비
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = weatherIcon,
+                        contentDescription = "날씨",
+                        tint = textColor,
+                        modifier = Modifier.size(32.dp)
+                    )
+
+                    // ✅ 강수확률 표시 영역 (항상 동일한 공간 차지)
+                    Box(
+                        modifier = Modifier.width(50.dp), // ✅ 고정 너비
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (precipitationPercent > 0) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.WaterDrop,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4A90E2),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "$precipitationPercent%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // ✅ 중앙: 날씨 아이콘
-            Icon(
-                imageVector = weatherIcon,
-                contentDescription = "날씨 아이콘",
-                tint = Color.Unspecified,
-                modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .size(28.dp)
-            )
-
-            // ✅ 오른쪽: 온도 정보
-            Column(
-                horizontalAlignment = Alignment.End
+            // ✅ 오른쪽: 온도
+            Row(
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.width(70.dp)
             ) {
                 Text(
                     text = "${String.format("%.0f", day.temp.max)}°",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
                     color = textColor
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "/",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textColor.copy(alpha = 0.3f)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "${String.format("%.0f", day.temp.min)}°",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = textColor.copy(alpha = 0.7f)
+                    color = textColor.copy(alpha = 0.5f)
                 )
             }
         }

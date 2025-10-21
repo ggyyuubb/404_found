@@ -58,7 +58,7 @@ fun HourlyForecastGraphRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 12.dp, horizontal = 8.dp)
-        ) {
+        )  {
             itemsIndexed(hourlyData) { index, forecast ->
                 val forecastTime = Instant.ofEpochSecond(forecast.dt)
                     .atZone(ZoneId.of("Asia/Seoul"))

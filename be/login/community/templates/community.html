@@ -29,14 +29,26 @@
     .like-heart.unliked { color: #bbb; }
     .profile-img { width:32px; height:32px; border-radius:50%; vertical-align:middle; margin-right:8px; object-fit:cover; background:#eee; cursor:pointer; }
     .default-profile-icon { width:32px; height:32px; vertical-align:middle; margin-right:8px; display:inline-block; cursor:pointer; }
+    .modal-bg {
+      position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.3); z-index: 1000; display: none;
+      align-items: center; justify-content: center;
+    }
+    .modal {
+      background: #fff; border-radius: 16px; padding: 32px 24px; min-width: 320px; box-shadow: 0 4px 24px #0002;
+    }
+    .modal input[type="text"] { width: 80%; padding: 8px; margin-bottom: 12px; }
+    .modal .search-result { margin-top: 12px; }
+    .modal .search-item { display: flex; align-items: center; margin-bottom: 8px; }
+    .modal .search-nick { font-weight: bold; margin-right: 8px; cursor: pointer; }
+    .modal .search-btn { margin-left: 8px; }
   </style>
 </head>
 <body>
   <h2>커뮤니티</h2>
-  <form id="postForm" enctype="multipart/form-data">
+  <form id="postForm" enctype="multipart/form-data" style="display:inline-block;">
     <textarea id="content" rows="3" cols="40" placeholder="글을 작성하세요"></textarea><br>
     <input type="file" id="image" accept="image/*" multiple><br>
-
     <div>
       <b>옷장 이미지 첨부:</b>
       <button type="button" id="toggleClosetBtn" style="margin-left:8px;">▼ 펼치기</button>
@@ -44,20 +56,30 @@
       <input type="text" id="closetSearch" placeholder="옷 검색" style="margin-left:8px; width:120px; display:none;">
       <div id="closetList" class="card-list" style="display: none;"></div>
     </div>
-
     <div>
       <b>추천코디 첨부:</b>
       <button type="button" id="toggleRecoBtn" style="margin-left:8px;">▼ 펼치기</button>
       <input type="text" id="recoSearch" placeholder="코디 검색" style="margin-left:8px; width:120px; display:none;">
       <div id="recoList" class="card-list" style="display:none;"></div>
     </div>
-
     <input type="hidden" id="selectedRecoIdx">
     <br>
     <button type="submit">글 작성</button>
   </form>
+  <button type="button" id="friendSearchBtn" style="margin-left:16px;">친구 검색</button>
   <hr>
   <div id="posts"></div>
+
+  <div class="modal-bg" id="friendSearchModal">
+    <div class="modal">
+      <h3>친구 검색</h3>
+      <input type="text" id="friendSearchInput" placeholder="닉네임을 입력하세요" autocomplete="off" />
+      <div class="search-result" id="friendSearchResult"></div>
+      <div style="margin-top:16px;">
+        <button type="button" onclick="closeFriendSearch()">닫기</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     let myUid = null;
@@ -70,6 +92,82 @@
 
     function getJwt() {
       return localStorage.getItem('jwt');
+    }
+
+    document.getElementById('friendSearchBtn').onclick = function() {
+      document.getElementById('friendSearchModal').style.display = 'flex';
+      document.getElementById('friendSearchInput').value = '';
+      document.getElementById('friendSearchResult').innerHTML = '';
+    };
+    function closeFriendSearch() {
+      document.getElementById('friendSearchModal').style.display = 'none';
+    }
+
+    document.getElementById('friendSearchInput').addEventListener('input', async function() {
+      const keyword = this.value.trim();
+      const jwt = getJwt();
+      if (!keyword) {
+        document.getElementById('friendSearchResult').innerHTML = '';
+        return;
+      }
+      const res = await fetch(`/community/search_friend?nickname=${encodeURIComponent(keyword)}`, {
+        headers: { 'Authorization': 'Bearer ' + jwt }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const results = data.results || [];
+        if (results.length === 0) {
+          document.getElementById('friendSearchResult').innerHTML = '<div>검색 결과 없음</div>';
+        } else {
+          document.getElementById('friendSearchResult').innerHTML = results.map(user => {
+            const imgTag = user.profile_image
+              ? `<img src="${user.profile_image}" style="width:32px;height:32px;border-radius:50%;margin-right:8px;object-fit:cover;">`
+              : `<span class="default-profile-icon" style="width:32px;height:32px;display:inline-block;margin-right:8px;">
+                  <svg viewBox="0 0 24 24" fill="#bbb" width="32" height="32">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4 8-4 8-4s8 0 8 4v2H4v-2z"/>
+                  </svg>
+                </span>`;
+            return `<div class="search-item">
+              <span onclick="goToProfile('${user.user_id}')">${imgTag}<span class="search-nick">${user.nickname || user.user_id}</span></span>
+              <button class="search-btn" onclick="addFriendByNickname('${user.nickname}')">추가</button>
+              <button class="search-btn" onclick="deleteFriendByNickname('${user.nickname}')">삭제</button>
+            </div>`;
+          }).join('');
+        }
+      } else {
+        document.getElementById('friendSearchResult').innerHTML = '<div>검색 실패</div>';
+      }
+    });
+
+    async function addFriendByNickname(nickname) {
+      const jwt = getJwt();
+      const res = await fetch('/community/add_friend_by_nickname', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname })
+      });
+      if (res.ok) {
+        alert('친구 추가 완료!');
+      } else {
+        const data = await res.json();
+        alert(data.error || '친구 추가 실패');
+      }
+    }
+
+    async function deleteFriendByNickname(nickname) {
+      const jwt = getJwt();
+      const res = await fetch('/community/delete_friend_by_nickname', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname })
+      });
+      if (res.ok) {
+        alert('친구 삭제 완료!');
+      } else {
+        const data = await res.json();
+        alert(data.error || '친구 삭제 실패');
+      }
     }
 
     async function fetchMyUid() {
@@ -338,22 +436,7 @@
     }
 
     async function goToProfile(userId) {
-      const jwt = getJwt();
-      if (!jwt) {
-        window.location.href = `/community/profile/${userId}`;
-        return;
-      }
-      const res = await fetch(`/community/profile/${userId}`, {
-        headers: { 'Authorization': 'Bearer ' + jwt }
-      });
-      if (res.ok) {
-        const html = await res.text();
-        document.open();
-        document.write(html);
-        document.close();
-      } else {
-        window.location.href = `/community/profile/${userId}`;
-      }
+      window.location.href = `/community/profile/${userId}`;
     }
 
     async function sharePost(postId) {

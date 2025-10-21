@@ -1,6 +1,8 @@
 // 📁 navigation/BottomNavigationBar.kt
 package com.example.wearther.navigation
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,7 +14,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 fun BottomNavigationBar(navController: NavController) {
     val items = listOf(
         BottomNavItem("home", "홈", Icons.Default.Home),
-        BottomNavItem("closet", "옷장", Icons.Default.ShoppingCart),
+        BottomNavItem("closet", "옷장", Icons.Default.DryCleaning),
         BottomNavItem("community", "커뮤니티", Icons.Default.Group), // ✅ friends → community로 변경!
         BottomNavItem("settings", "설정", Icons.Default.Settings)
     )
@@ -20,7 +22,9 @@ fun BottomNavigationBar(navController: NavController) {
     val navBackStackEntry = navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry.value?.destination?.route
 
-    NavigationBar {
+    NavigationBar (
+        windowInsets = WindowInsets.navigationBars
+        ) {
         items.forEach { item ->
             NavigationBarItem(
                 icon = { Icon(item.icon, contentDescription = item.title) },

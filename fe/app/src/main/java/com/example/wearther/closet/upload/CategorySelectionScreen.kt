@@ -72,6 +72,7 @@ fun CategorySelectionScreen(
 
     fun uploadImage() {
         if (!canProceed) return
+
         coroutineScope.launch {
             isUploading = true
             try {
@@ -81,53 +82,63 @@ fun CategorySelectionScreen(
                     return@launch
                 }
 
+                // 1) 파일 준비
                 val file = uriToFile(context, selectedImageUri)
                 val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                 val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
 
-                Log.d("Upload", "업로드 시작: category=$selectedCategory")
+                Log.d("Upload", "업로드 시작: type=$selectedType, category=$selectedCategory")
 
-                // 기존 업로드 API 사용 (AI가 백그라운드에서 분석)
+                // 2) 업로드 (AI 분석은 서버에서)
                 val response = uploadApi.uploadImage(
                     token = "Bearer $jwtToken",
                     image = imagePart
                 )
 
+                // 파일 정리
+                file.delete()
+
                 Log.d("Upload", "서버 응답: $response")
                 Log.d("Upload", "AI 분석 결과: ${response.ai_result}")
 
-                file.delete()
-
+                // 3) 에러 처리
                 if (response.error != null) {
                     Toast.makeText(context, "업로드 실패: ${response.error}", Toast.LENGTH_LONG).show()
-                } else {
-                    // AI 분석 결과 로그 출력
-                    response.ai_result?.let { ai ->
-                        Log.d("AIResult", "=== AI 분석 결과 ===")
-                        Log.d("AIResult", "clothing_type: ${ai.clothing_type}")
-                        Log.d("AIResult", "colors: ${ai.colors}")
-                        Log.d("AIResult", "material: ${ai.material}")
-                        Log.d("AIResult", "suitable_temperature: ${ai.suitable_temperature}")
-                        Log.d("AIResult", "==================")
-                    }
-
-                    // 사용자가 선택한 카테고리로 업데이트
-                    if (response.id != null) {
-                        try {
-                            val updateResponse = uploadApi.updateClothing(
-                                token = "Bearer $jwtToken",
-                                imageId = response.id,
-                                clothingType = selectedCategory
-                            )
-                            Log.d("Upload", "카테고리 업데이트 완료: $updateResponse")
-                        } catch (e: Exception) {
-                            Log.e("Upload", "카테고리 업데이트 실패", e)
-                        }
-                    }
-
-                    Toast.makeText(context, "업로드 완료!", Toast.LENGTH_SHORT).show()
-                    onUploadSuccess()
+                    return@launch
                 }
+
+                // 4) 업로드 성공 시, 사용자가 고른 카테고리로 JSON 업데이트
+                val imageId = response.id
+                if (!imageId.isNullOrBlank()) {
+                    try {
+                        // "반소매" -> "shortsleeve" 등으로 변환
+                        val englishSub = com.example.wearther.closet.data.ClosetSortUtils
+                            .toEnglish(selectedCategory) ?: selectedCategory
+
+                        // 대분류는 UI에서 선택한 한글 그대로 (서버가 type=한글 보관)
+                        val mainKo = selectedType
+
+                        val body = com.example.wearther.closet.upload.UpdateClothingRequest(
+                            type = mainKo,                 // 예: "상의"
+                            category = englishSub,         // 예: "shortsleeve"
+                            colors = null,                 // 이 화면에서는 색상 선택 안함
+                            material = null,
+                            suitable_temperature = null
+                        )
+
+                        val updateResponse = uploadApi.updateClothingJson(
+                            token = "Bearer $jwtToken",
+                            imageId = imageId,
+                            body = body
+                        )
+                        Log.d("Upload", "업데이트 완료: $updateResponse")
+                    } catch (e: Exception) {
+                        Log.e("Upload", "카테고리 업데이트 실패", e)
+                    }
+                }
+
+                Toast.makeText(context, "업로드 완료!", Toast.LENGTH_SHORT).show()
+                onUploadSuccess()
 
             } catch (e: Exception) {
                 Log.e("Upload", "업로드 오류", e)
@@ -137,6 +148,7 @@ fun CategorySelectionScreen(
             }
         }
     }
+
 
     val buttonColor by animateColorAsState(
         targetValue = if (canProceed) Color.Black else Color.Gray,

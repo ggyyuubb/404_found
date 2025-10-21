@@ -41,7 +41,7 @@ fun WeatherContent(
     onSearchLocation: suspend (String) -> List<SavedLocation> = { emptyList() }
 ) {
     val now = Instant.now().atZone(ZoneId.of("Asia/Seoul")).toLocalDateTime()
-    val nowText = now.format(DateTimeFormatter.ofPattern("현재 시각: HH시 mm분"))
+    //val nowText = now.format(DateTimeFormatter.ofPattern("현재 시각: HH시 mm분"))
     val todayTemps = data.daily?.firstOrNull()
 
     val endTime = now.plusHours(24)
@@ -64,10 +64,17 @@ fun WeatherContent(
             // 📍 이모지와 위치 텍스트 (클릭 가능)
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .wrapContentWidth()
                     .clickable { showLocationModal = true }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp)
+                    .background(
+                        color = Color.White.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+
+                // 2. verticalAlignment는 Row의 명시적인 인자로
+                verticalAlignment = Alignment.CenterVertically // ⬅️ 이 위치에 있어야 합니다.
             ) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
@@ -87,17 +94,18 @@ fun WeatherContent(
         }
 
         item {
-            Text(
+            /*Text(
                 text = nowText,
                 style = MaterialTheme.typography.bodyLarge.copy(color = sheetTextColor),
                 modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            )*/
         }
 
         item { Spacer(modifier = Modifier.height(16.dp)) }
 
         item {
-            CurrentWeatherCard(data = data)
+            CurrentWeatherCard(data = data,
+                textColor = sheetTextColor)
         }
 
         if (filteredHourly.isNotEmpty()) {

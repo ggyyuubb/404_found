@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,9 @@ import com.example.wearther.home.recommendation.HomeBottomSheetContent
 import com.example.wearther.home.recommendation.RecommendationViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material3.Icon
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,13 +104,10 @@ fun HomeScreen(
                 textColor = sheetTextColor,
                 viewModel = recommendationViewModel
             )
-        },
-        sheetContainerColor = sheetBackgroundColor,
-        sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            // 🔹 배경 먼저 그리기
+
             WeatherBackground(
                 weatherMain = weather?.current?.weather?.firstOrNull()?.main,
                 isDarkTheme = isDarkTheme
@@ -116,9 +117,12 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(16.dp)
-            ) {
+                    .padding(
+                        top = innerPadding.calculateTopPadding(), // 상단만 사용
+                        start = 16.dp,
+                        end = 16.dp
+                    )
+            ){
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -178,10 +182,13 @@ fun HomeScreen(
                             )
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text(
-                            text = "📅",
-                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                            modifier = Modifier.padding(end = 6.dp)
+                        Icon(
+                            imageVector = Icons.Outlined.CalendarToday,
+                            contentDescription = "달력",
+                            tint = sheetTextColor,         // ✅ 글자색과 통일
+                            modifier = Modifier
+                                .size(18.dp)              // ✅ 아이콘 크기 조절
+                                .padding(end = 6.dp)
                         )
                         Text(
                             text = java.time.LocalDate.now().format(
