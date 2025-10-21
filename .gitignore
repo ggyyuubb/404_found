@@ -1,0 +1,16 @@
+# Python 환경
+venv/
+__pycache__/
+*.pyc
+
+# IDE 및 OS 파일
+.vscode/
+.DS_Store
+
+# 민감한 키 파일 (Firebase, API 키 파일)
+*.json
+*.pem
+
+# Keras/TensorFlow 캐시 파일
+# (모델 파일 자체는 올려야 함: ranker_20251012_102057.keras)
+/checkpoint
