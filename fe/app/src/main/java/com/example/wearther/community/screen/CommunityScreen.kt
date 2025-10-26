@@ -41,24 +41,19 @@ fun CommunityScreen(navController: NavController) {
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    // 바텀 시트 상태
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     var showBottomSheet by remember { mutableStateOf(false) }
     var selectedUserName by remember { mutableStateOf("") }
 
-    // 🔥 SwipeRefresh 상태
     val swipeRefreshState = rememberSwipeRefreshState(isRefreshing = isLoading)
 
-    // 에러 메시지 표시
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
-            // TODO: Snackbar로 에러 표시
             viewModel.clearErrorMessage()
         }
     }
 
-    // 🔥 화면 진입 시 & 돌아올 때마다 피드 새로고침
     LaunchedEffect(Unit) {
         viewModel.loadFeeds()
     }
@@ -74,7 +69,6 @@ fun CommunityScreen(navController: NavController) {
                     )
                 },
                 actions = {
-                    // 🔥 새로고침 버튼 추가
                     IconButton(onClick = { viewModel.loadFeeds() }) {
                         Icon(
                             Icons.Default.Refresh,
@@ -94,7 +88,6 @@ fun CommunityScreen(navController: NavController) {
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.End
             ) {
-                // 친구 찾기 FAB
                 SmallFloatingActionButton(
                     onClick = { navController.navigate("search_user") },
                     containerColor = Color.White,
@@ -112,7 +105,6 @@ fun CommunityScreen(navController: NavController) {
                     )
                 }
 
-                // 게시글 작성 FAB
                 FloatingActionButton(
                     onClick = { navController.navigate("add_post") },
                     containerColor = Color(0xFF3B82F6),
@@ -132,7 +124,6 @@ fun CommunityScreen(navController: NavController) {
             }
         }
     ) { padding ->
-        // 🔥 SwipeRefresh로 감싸기
         SwipeRefresh(
             state = swipeRefreshState,
             onRefresh = { viewModel.loadFeeds() },
@@ -147,7 +138,6 @@ fun CommunityScreen(navController: NavController) {
             ) {
                 when {
                     isLoading && feeds.isEmpty() -> {
-                        // 로딩 중
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -159,7 +149,6 @@ fun CommunityScreen(navController: NavController) {
                     }
 
                     feeds.isEmpty() -> {
-                        // 빈 상태
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -190,7 +179,6 @@ fun CommunityScreen(navController: NavController) {
                     }
 
                     else -> {
-                        // 피드 목록
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp),
@@ -200,11 +188,15 @@ fun CommunityScreen(navController: NavController) {
                                 FeedCard(
                                     feed = feed,
                                     onToggleLike = { viewModel.toggleLike(feed.id) },
-                                    onCommentClick = { navController.navigate("post_detail/${feed.id}") },
-                                    onCardClick = { navController.navigate("post_detail/${feed.id}") },
+                                    onCommentClick = {
+                                        scope.launch {
+                                            selectedUserName = feed.userName
+                                            showBottomSheet = true
+                                        }
+                                    },
+                                    // ✅ 프로필 클릭 시 UserProfileScreen으로 이동
                                     onProfileClick = {
-                                        selectedUserName = feed.userName
-                                        showBottomSheet = true
+                                        navController.navigate("user_profile/${feed.userId}")
                                     }
                                 )
                             }
@@ -213,15 +205,26 @@ fun CommunityScreen(navController: NavController) {
                 }
             }
         }
-    }
 
-    // 바텀 시트는 그대로 유지
-    if (showBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showBottomSheet = false },
-            sheetState = sheetState
-        ) {
-            // ... 기존 바텀 시트 코드 ...
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                sheetState = sheetState
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        "${selectedUserName}님의 댓글",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("댓글 기능은 아직 구현 중입니다.")
+                }
+            }
         }
     }
 }
@@ -231,18 +234,12 @@ private fun FeedCard(
     feed: com.example.wearther.community.data.FeedItem,
     onToggleLike: () -> Unit,
     onCommentClick: () -> Unit,
-    onCardClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit // ✅ 프로필 클릭 콜백 추가
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCardClick() }
-            .shadow(
-                elevation = 2.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = Color.Black.copy(alpha = 0.05f)
-            ),
+            .shadow(2.dp, RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -251,17 +248,17 @@ private fun FeedCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // 프로필 헤더
+            // 프로필 영역
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 프로필 이미지
+                // ✅ 프로필 이미지 클릭 가능하게
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .clickable { onProfileClick() }
+                        .clickable { onProfileClick() } // ✅ 클릭 이벤트
                 ) {
                     if (feed.userProfileImage.isNullOrEmpty()) {
                         Box(
@@ -293,10 +290,11 @@ private fun FeedCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
+                // ✅ 이름도 클릭 가능하게
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onProfileClick() }
+                        .clickable { onProfileClick() } // ✅ 클릭 이벤트
                 ) {
                     Text(
                         feed.userName,
@@ -311,7 +309,6 @@ private fun FeedCard(
                     )
                 }
 
-                // 날씨 배지
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color(0xFFEFF6FF)
@@ -339,7 +336,6 @@ private fun FeedCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 이미지 영역
             if (feed.outfitImages.isNullOrEmpty()) {
                 Box(
                     modifier = Modifier
@@ -393,13 +389,11 @@ private fun FeedCard(
             HorizontalDivider(thickness = 1.dp, color = Color(0xFFF3F4F6))
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 하단 액션
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // 좋아요
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -422,7 +416,6 @@ private fun FeedCard(
                     )
                 }
 
-                // 댓글
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -447,7 +440,6 @@ private fun FeedCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 공유
                 IconButton(
                     onClick = { /* TODO: 공유 기능 */ },
                     modifier = Modifier.size(36.dp)

@@ -5,6 +5,7 @@ Community Main Blueprint
 from flask import Blueprint
 from community_posts import community_posts_bp
 from community_social import community_social_bp
+from community_user import community_user_bp  # ✅ 추가
 
 # 메인 Blueprint 생성
 community_bp = Blueprint('community_bp', __name__)
@@ -12,12 +13,12 @@ community_bp = Blueprint('community_bp', __name__)
 # 사용법:
 # Flask 앱에서 다음과 같이 등록:
 #
-# from community_main import community_bp, community_posts_bp, community_social_bp
+# from community_main import community_posts_bp, community_social_bp, community_user_bp
 # 
 # app.register_blueprint(community_posts_bp)
 # app.register_blueprint(community_social_bp)
+# app.register_blueprint(community_user_bp)  # ✅ 추가
 #
-# 또는 개별적으로 임포트해서 사용
 
 """
 ==================== API 엔드포인트 목록 ====================
@@ -40,7 +41,11 @@ community_bp = Blueprint('community_bp', __name__)
 - GET    /community/posts/<post_id>/comments/<comment_id>/replies     대댓글 목록
 - POST   /community/posts/<post_id>/comments/<comment_id>/replies     대댓글 작성
 
-[사용자 관련 - community_social_bp] 🔥 새로 추가
+[사용자 프로필 관련 - community_user_bp] 🔥 새로 추가
+- GET    /community/users/<user_id>/profile        사용자 프로필 조회
+- GET    /community/users/<user_id>/posts          사용자 게시물 목록
+
+[사용자 검색/팔로우 - community_social_bp]
 - GET    /community/users/search                   사용자 검색
 - GET    /community/users/<user_id>                사용자 프로필 조회
 - POST   /community/users/<user_id>/follow         팔로우/언팔로우 토글
@@ -53,20 +58,4 @@ community_bp = Blueprint('community_bp', __name__)
 [차단 관련 - community_social_bp]
 - POST   /community/block_user                     사용자 차단
 - POST   /community/unblock_user                   사용자 차단 해제
-
-==================== 사용 예시 ====================
-
-# Flask 앱에서 등록:
-from flask import Flask
-from community_posts import community_posts_bp
-from community_social import community_social_bp
-
-app = Flask(__name__)
-
-# Blueprint 등록
-app.register_blueprint(community_posts_bp)
-app.register_blueprint(community_social_bp)
-
-if __name__ == '__main__':
-    app.run(debug=True)
 """

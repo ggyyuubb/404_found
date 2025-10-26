@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class FeedItem(
     @SerializedName("id") val id: String,
+    @SerializedName("user_id") val userId: String,
     @SerializedName("nickname") val userName: String,
     @SerializedName("profile_image") val userProfileImage: String? = null,
     @SerializedName("created_at") val postTime: String,

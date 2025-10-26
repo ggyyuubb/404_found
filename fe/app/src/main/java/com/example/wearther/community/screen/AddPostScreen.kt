@@ -9,16 +9,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome // ✅ import 추가
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp // ✅ import 추가
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.example.wearther.community.vm.CommunityViewModel
 import com.example.wearther.community.vm.addFeed
 import com.example.wearther.community.vm.addFeedWithImage
-import com.example.wearther.home.weather.WeatherViewModel // ✅ import 추가
+import com.example.wearther.home.weather.WeatherViewModel
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -51,8 +54,8 @@ fun AddPostScreen(
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     val isUploading by viewModel.isLoading.collectAsState()
     var showImageSourceDialog by remember { mutableStateOf(false) }
+    var showAiComingSoonDialog by remember { mutableStateOf(false) } // ✅ 추가
 
-    // ✅ 이미지가 있는지 확인
     val hasImage = selectedImageUri != null || aiImageUrl != null
 
     LaunchedEffect(currentTemp, currentWeather) {
@@ -183,11 +186,9 @@ fun AddPostScreen(
         }
     }
 
-    // ✅✅ 업로드 로직 - 유효성 검사 추가
     fun upload() {
         Log.i(TAG, "--- [ 게시물 업로드 시도 ] ---")
 
-        // ✅ 필수 입력 체크
         when {
             description.isBlank() -> {
                 showSnack("내용을 입력해 주세요.")
@@ -236,15 +237,14 @@ fun AddPostScreen(
         }
     }
 
-    // --- 3. UI 그리기 (Drawing UI) ---
     Scaffold(
         topBar = {
             AddPostTopBar(
                 isUploading = isUploading,
                 description = description,
-                temperature = temperature, // ✅ 전달
-                weather = weather,         // ✅ 전달
-                hasImage = hasImage,       // ✅ 전달
+                temperature = temperature,
+                weather = weather,
+                hasImage = hasImage,
                 onUploadClick = { upload() },
                 onBackClick = { navController.popBackStack() }
             )
@@ -267,11 +267,45 @@ fun AddPostScreen(
                 showImageSourceDialog = true
             },
             onAiPickerClick = {
-                Log.d(TAG, "AI 추천 화면으로 이동 요청")
-                navController.navigate("ai_recommendation_picker")
+                // ✅✅ 개발 중 다이얼로그 표시 (앱 크래시 방지)
+                Log.d(TAG, "AI 추천 기능 준비중 다이얼로그 표시")
+                showAiComingSoonDialog = true
+
+                // 나중에 AI 기능 연결 시 아래 코드로 교체:
+                // navController.navigate("ai_recommendation_picker")
             },
             onTakePhotoClick = { takePhoto() },
             onPickFromGalleryClick = { pickFromGallery() }
+        )
+    }
+
+    // ✅✅ AI 기능 준비중 다이얼로그
+    if (showAiComingSoonDialog) {
+        AlertDialog(
+            onDismissRequest = { showAiComingSoonDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text("AI 추천 기능 준비중")
+            },
+            text = {
+                Text(
+                    "AI 코디 추천 기능은 현재 개발 중입니다.\n" +
+                            "곧 멋진 기능으로 찾아뵙겠습니다! 🤖✨",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAiComingSoonDialog = false }) {
+                    Text("확인")
+                }
+            }
         )
     }
 

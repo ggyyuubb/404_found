@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil.ImageLoader // ✅ 추가
 import com.example.wearther.setting.auth.GoogleSignInHelper
 import com.example.wearther.setting.auth.handleEmailLogin
 import com.example.wearther.setting.data.ProfileRepository
@@ -32,8 +33,6 @@ fun SettingScreen(navController: NavController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
-
-    // ✅ 프로필 사진 URL 상태 추가
     var photoUrl by remember { mutableStateOf<String?>(null) }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
@@ -41,7 +40,6 @@ fun SettingScreen(navController: NavController) {
     ) { result ->
         GoogleSignInHelper.handleSignInResult(activity, result) {
             user = FirebaseAuth.getInstance().currentUser
-            // ✅ 로그인 후 프로필 사진도 업데이트
             photoUrl = user?.photoUrl?.toString()
             Log.d("GoogleLogin", "🎉 구글 로그인 성공 후 UI 업데이트")
         }
@@ -52,14 +50,11 @@ fun SettingScreen(navController: NavController) {
         Log.d("GoogleLogin", "✅ Google 로그인 런처 등록 완료")
     }
 
-    // ✅ 로그인된 사용자의 Firestore 데이터 불러오기 (닉네임 + 프로필 사진)
     LaunchedEffect(user) {
         user?.let { currentUser ->
-            // Firebase Auth의 photoUrl 먼저 설정
             photoUrl = currentUser.photoUrl?.toString()
             Log.d("SettingScreen", "Firebase Auth photoUrl: $photoUrl")
 
-            // Firestore에서 저장된 프로필 사진이 있는지 확인
             Firebase.firestore.collection("users").document(currentUser.uid)
                 .get()
                 .addOnSuccessListener { doc ->
@@ -68,7 +63,6 @@ fun SettingScreen(navController: NavController) {
                                 ?: currentUser.email
                                 ?: "사용자"
 
-                    // ✅ Firestore에 저장된 프로필 사진 URL이 있으면 우선 사용
                     val firestorePhotoUrl = doc.getString("profile_image")
                     if (!firestorePhotoUrl.isNullOrEmpty()) {
                         photoUrl = firestorePhotoUrl
@@ -95,19 +89,27 @@ fun SettingScreen(navController: NavController) {
         if (user != null) {
             val profileRepository = remember { ProfileRepository(context) }
 
-            Log.d("SettingScreen", "ProfileScreen에 전달할 photoUrl: $photoUrl")
-
             ProfileScreen(
                 displayName = "$nickname 님",
-                photoUrl = photoUrl, // ✅ 상태로 관리되는 photoUrl 전달
+                photoUrl = photoUrl,
                 email = user?.email ?: user?.displayName ?: "사용자",
                 onPhotoUrlChanged = { newUrl ->
                     Log.d("SettingScreen", "🖼️ 새 프로필 사진 URL 받음: $newUrl")
 
-                    // ✅ UI 즉시 업데이트
+                    // ✅ 1. UI 즉시 업데이트
                     photoUrl = newUrl
 
-                    // Firestore에도 저장
+                    // ✅ 2. Coil 전체 캐시 초기화 (피드에서도 새 프로필 보임)
+                    try {
+                        val imageLoader = ImageLoader(context)
+                        imageLoader.memoryCache?.clear()
+                        imageLoader.diskCache?.clear()
+                        Log.d("SettingScreen", "✅ Coil 전체 캐시 삭제 완료 - 피드에서도 새 프로필 보임!")
+                    } catch (e: Exception) {
+                        Log.e("SettingScreen", "⚠️ Coil 캐시 삭제 실패 (무시 가능)", e)
+                    }
+
+                    // ✅ 3. Firestore에 저장
                     user?.let { currentUser ->
                         Firebase.firestore.collection("users").document(currentUser.uid)
                             .update("profile_image", newUrl)
@@ -169,7 +171,7 @@ fun SettingScreen(navController: NavController) {
                 onClick = {
                     auth.signOut()
                     user = null
-                    photoUrl = null // ✅ 로그아웃 시 프로필 사진도 초기화
+                    photoUrl = null
                     Log.d("Login", "✅ 로그아웃 완료")
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -197,7 +199,6 @@ fun SettingScreen(navController: NavController) {
                         navController = navController,
                         onUserUpdated = {
                             user = it
-                            // ✅ 이메일 로그인 후 프로필 사진도 로드
                             photoUrl = it?.photoUrl?.toString()
                         }
                     )

@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from firebase_admin import firestore, storage
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from werkzeug.exceptions import BadRequest # BadRequest import 추가
+from werkzeug.exceptions import BadRequest
 import uuid
 
 community_posts_bp = Blueprint('community_posts_bp', __name__)
@@ -17,19 +17,18 @@ db = firestore.client()
 def create_post():
     uid = get_jwt_identity()
     content = None
-    temperature = "N/A" # 기본값 설정
-    weather = "N/A" # 기본값 설정
+    temperature = "N/A"
+    weather = "N/A"
     image_urls = []
     closet_items = []
     reco_item = None
 
     try:
-        # 이미지 업로드 (multipart/form-data) 처리
-        if request.content_type.startswith('multipart/form-data'):
+        if request.content_type and request.content_type.startswith('multipart/form-data'):
             print("💾 Handling multipart/form-data request")
             content = request.form.get('description', '').strip()
-            temperature = request.form.get('temperature', 'N/A') # form에서 받기
-            weather = request.form.get('weather', 'N/A')     # form에서 받기
+            temperature = request.form.get('temperature', 'N/A')
+            weather = request.form.get('weather', 'N/A')
             image_file = request.files.get('image')
 
             if image_file:
@@ -44,25 +43,18 @@ def create_post():
                     print(f"✅ Image uploaded to Firebase Storage: {blob.public_url}")
                 except Exception as e:
                     print(f"❌ Firebase Storage upload error: {str(e)}")
-                    # 이미지 업로드 실패 시 에러 반환 또는 계속 진행 결정
-                    # return jsonify(error=f"Image upload failed: {str(e)}"), 500
             else:
                 print("⚠️ No image file found in the request.")
-            # multipart 요청 시 form 데이터에서 다른 필드도 받을 수 있음
-            # closet_items = request.form.getlist('closet_items') # 예시: 리스트로 받기
-            # reco_item = request.form.get('reco_item') # 예시
 
-        # 텍스트 또는 AI 이미지 URL 업로드 (application/json) 처리
-        elif request.content_type.startswith('application/json'):
+        elif request.content_type and request.content_type.startswith('application/json'):
             print("📄 Handling application/json request")
             data = request.get_json()
             if not data:
                 raise BadRequest("Request body must be JSON.")
 
             content = data.get('description', '').strip()
-            temperature = data.get('temperature', 'N/A') # JSON에서 받기
-            weather = data.get('weather', 'N/A')     # JSON에서 받기
-            # imageUrl (AI 이미지 URL) 처리
+            temperature = data.get('temperature', 'N/A')
+            weather = data.get('weather', 'N/A')
             ai_image_url = data.get('imageUrl')
             if ai_image_url:
                 image_urls.append(ai_image_url)
@@ -81,12 +73,10 @@ def create_post():
         print(f"❌ Server error during request processing: {str(e)}")
         return jsonify(error="Internal server error processing request"), 500
 
-    # 내용 필드가 비어있는지 최종 확인
     if not content:
         print("⚠️ Content is empty.")
         return jsonify(error='내용을 입력하세요.'), 400
 
-    # 사용자 정보 가져오기
     user_doc_ref = db.collection('users').document(uid)
     user_doc = user_doc_ref.get()
     user_data = user_doc.to_dict() if user_doc.exists else {}
@@ -94,14 +84,13 @@ def create_post():
     profile_image = user_data.get('profile_image')
     age_group = user_data.get('age_group')
 
-    # Firestore에 저장할 데이터 구성
     post = {
         'user_id': uid,
         'nickname': nickname,
         'profile_image': profile_image,
         'age_group': age_group,
         'content': content,
-        'image_urls': image_urls, # Firebase Storage URL 또는 AI 이미지 URL
+        'image_urls': image_urls,
         'closet_items': closet_items,
         'reco_item': reco_item,
         'temperature': temperature,
@@ -110,12 +99,10 @@ def create_post():
         'likes': [],
         'likes_count': 0,
         'comment_count': 0,
-        'share_count': 0
-        # 앱에서 필요한 기본값 추가
-        , 'liked_by_me': False
+        'share_count': 0,
+        'liked_by_me': False
     }
 
-    # Firestore에 저장 및 결과 반환
     try:
         doc_ref = db.collection('community_posts').add(post)
         post_id = doc_ref[1].id
@@ -123,9 +110,7 @@ def create_post():
         user_doc_ref.update({'post_count': firestore.Increment(1)})
         print(f"✅ User post_count incremented for user: {uid}")
 
-        # 앱 UI 업데이트를 위해 저장된 전체 데이터 반환
         post['id'] = post_id
-        # Firestore Timestamp를 문자열로 변환 (ISO 포맷 권장 또는 필요한 포맷)
         if isinstance(post['created_at'], datetime):
              post['created_at'] = post['created_at'].strftime('%Y-%m-%d %H:%M:%S')
 
@@ -162,13 +147,41 @@ def get_posts():
             friends_ref = user_doc_ref.collection('friends')
             friend_ids = {f.to_dict().get('user_id') for f in friends_ref.stream() if f.to_dict().get('user_id')}
 
+    user_profiles_cache = {}
+
     for doc in posts_ref.stream():
         post = doc.to_dict()
-        post_id = doc.id # Firestore 문서 ID 가져오기
-        post['id'] = post_id # 응답에 id 필드 추가
+        post_id = doc.id
+        post['id'] = post_id
 
         if uid and post.get('user_id') in blocked_ids:
             continue
+
+        post_user_id = post.get('user_id')
+        if post_user_id:
+            if post_user_id not in user_profiles_cache:
+                try:
+                    user_doc = db.collection('users').document(post_user_id).get()
+                    if user_doc.exists:
+                        user_data = user_doc.to_dict()
+                        user_profiles_cache[post_user_id] = {
+                            'nickname': user_data.get('nickname', post_user_id),
+                            'profile_image': user_data.get('profile_image')
+                        }
+                    else:
+                        user_profiles_cache[post_user_id] = {
+                            'nickname': post.get('nickname', post_user_id),
+                            'profile_image': post.get('profile_image')
+                        }
+                except Exception as e:
+                    print(f"Error fetching user profile for {post_user_id}: {e}")
+                    user_profiles_cache[post_user_id] = {
+                        'nickname': post.get('nickname', post_user_id),
+                        'profile_image': post.get('profile_image')
+                    }
+            
+            post['nickname'] = user_profiles_cache[post_user_id]['nickname']
+            post['profile_image'] = user_profiles_cache[post_user_id]['profile_image']
 
         likes = post.get('likes', [])
         post['likes_count'] = post.get('likes_count', len(likes))
@@ -176,29 +189,25 @@ def get_posts():
         post['comment_count'] = post.get('comment_count', 0)
 
         created_at = post.get('created_at')
-        post_timestamp = 0 # 정렬을 위한 타임스탬프 (초 단위)
+        post_timestamp = 0
         if isinstance(created_at, datetime):
-            # Firestore Timestamp 객체를 문자열로 변환
             post['created_at'] = created_at.strftime('%Y-%m-%d %H:%M:%S')
             try:
                 post_timestamp = created_at.timestamp()
             except Exception:
                 post_timestamp = 0
         elif isinstance(created_at, str):
-            # 이미 문자열인 경우, timestamp 변환 시도
-             try:
+            try:
                 dt_obj = datetime.strptime(created_at, '%Y-%m-%d %H:%M:%S')
                 post_timestamp = dt_obj.timestamp()
-             except Exception:
+            except Exception:
                 post_timestamp = 0
         else:
-            # 예상치 못한 타입이면 0으로 처리
             post_timestamp = 0
 
-        post['_ts'] = post_timestamp # 정렬용 필드 추가 (클라이언트에서는 사용 안 함)
+        post['_ts'] = post_timestamp
         all_posts.append(post)
 
-    # 피드 정렬 로직
     priority_posts = []
     same_age_posts = []
     diff_age_posts = []
@@ -211,7 +220,6 @@ def get_posts():
         else:
             diff_age_posts.append(post)
 
-    # 최신순 정렬 (timestamp 기준)
     priority_posts.sort(key=lambda p: -p.get('_ts', 0))
     same_age_posts.sort(key=lambda p: -p.get('_ts', 0))
     diff_age_posts.sort(key=lambda p: -p.get('_ts', 0))
@@ -310,17 +318,6 @@ def toggle_like(post_id):
         return jsonify(error='Failed to toggle like'), 500
 
 
-# ==================== 이미지 업로드 (별도 API - create_post에서 처리하므로 주석 처리 또는 제거 가능) ====================
-
-# @community_posts_bp.route('/community/upload_image', methods=['POST'])
-# @jwt_required()
-# def upload_image():
-#     """이미지 업로드 (Firebase Storage) - create_post에서 통합 처리"""
-#     # ... (이 함수는 이제 create_post에서 처리하므로 필요 없을 수 있음) ...
-
-
-# ==================== 공유 (안정성 강화) ====================
-
 @community_posts_bp.route('/community/posts/<post_id>/share', methods=['POST'])
 @jwt_required()
 def share_post(post_id):
@@ -328,21 +325,18 @@ def share_post(post_id):
     post_ref = db.collection('community_posts').document(post_id)
 
     try:
-        # 원자적 업데이트
         update_result = post_ref.update({
             'share_count': firestore.Increment(1),
             'shared_by': firestore.ArrayUnion([uid])
         })
 
-        # 업데이트 후 문서 다시 읽기 (선택 사항, 정확한 카운트 반환 위해)
         updated_doc = post_ref.get()
         if updated_doc.exists:
-            share_count = updated_doc.to_dict().get('share_count', 1) # 업데이트 후 값이므로 1 이상
+            share_count = updated_doc.to_dict().get('share_count', 1)
         else:
-            # 이론적으로는 update 성공 후 이 경로로 오면 안 됨
             return jsonify(error='글이 존재하지 않습니다.'), 404
 
-        post_path = f"/community/posts/{post_id}" # 상대 경로 반환
+        post_path = f"/community/posts/{post_id}"
         return jsonify(message='공유 완료', share_count=share_count, path=post_path), 200
 
     except Exception as e:

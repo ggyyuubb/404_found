@@ -2,20 +2,19 @@ package com.example.wearther.community.vm
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.example.wearther.community.api.CommentRequest // 필요한 import 확인
+import com.example.wearther.community.api.CommentRequest
 import com.example.wearther.community.data.Comment
 import com.example.wearther.community.data.User
 import kotlinx.coroutines.launch
 
 /* ==================== 댓글 관련 확장 함수 ==================== */
-// (댓글 관련 함수는 feedId가 String으로 잘 수정되어 있으므로 변경 없음)
 
 fun CommunityViewModel.loadComments(feedId: String) {
     viewModelScope.launch {
         try {
-            val commentList = api.getComments(feedId) // feedId는 String
+            val commentList = api.getComments(feedId)
             val currentComments = comments.value.toMutableMap()
-            currentComments[feedId] = commentList // String key 사용
+            currentComments[feedId] = commentList
             updateComments(currentComments)
         } catch (e: Exception) {
             setErrorMessage("댓글을 불러오는데 실패했습니다: ${e.message}")
@@ -25,9 +24,8 @@ fun CommunityViewModel.loadComments(feedId: String) {
 }
 
 fun CommunityViewModel.getCommentsForFeed(feedId: String): List<Comment> {
-    return comments.value[feedId] ?: emptyList() // String key 사용
+    return comments.value[feedId] ?: emptyList()
 }
-
 
 fun CommunityViewModel.addComment(feedId: String, content: String, userName: String? = null) {
     if (content.isBlank()) return
@@ -37,16 +35,16 @@ fun CommunityViewModel.addComment(feedId: String, content: String, userName: Str
         try {
             val authorName = userName ?: currentUser.value?.userName ?: "현재사용자"
             val request = CommentRequest(content, authorName)
-            val newComment = api.addComment(feedId, request) // feedId는 String
+            val newComment = api.addComment(feedId, request)
 
             val currentCommentsMap = comments.value.toMutableMap()
-            val currentFeedComments = currentCommentsMap[feedId] ?: emptyList() // String key 사용
-            currentCommentsMap[feedId] = currentFeedComments + newComment // String key 사용
+            val currentFeedComments = currentCommentsMap[feedId] ?: emptyList()
+            currentCommentsMap[feedId] = currentFeedComments + newComment
             updateComments(currentCommentsMap)
 
             val currentFeeds = feeds.value
             updateFeeds(currentFeeds.map { feed ->
-                if (feed.id == feedId) { // String 비교
+                if (feed.id == feedId) {
                     feed.copy(commentCount = feed.commentCount + 1)
                 } else feed
             })
@@ -59,20 +57,20 @@ fun CommunityViewModel.addComment(feedId: String, content: String, userName: Str
     }
 }
 
-fun CommunityViewModel.deleteComment(feedId: String, commentId: Int) { // commentId는 Int 유지 가정
+fun CommunityViewModel.deleteComment(feedId: String, commentId: Int) {
     viewModelScope.launch {
         try {
-            api.deleteComment(feedId, commentId) // feedId는 String
+            api.deleteComment(feedId, commentId)
 
             val currentCommentsMap = comments.value.toMutableMap()
-            val currentFeedComments = currentCommentsMap[feedId] ?: return@launch // String key 사용
-            val updatedComments = currentFeedComments.filter { it.id != commentId } // commentId는 Int 비교
-            currentCommentsMap[feedId] = updatedComments // String key 사용
+            val currentFeedComments = currentCommentsMap[feedId] ?: return@launch
+            val updatedComments = currentFeedComments.filter { it.id != commentId }
+            currentCommentsMap[feedId] = updatedComments
             updateComments(currentCommentsMap)
 
             val currentFeeds = feeds.value
             updateFeeds(currentFeeds.map { feed ->
-                if (feed.id == feedId) { // String 비교
+                if (feed.id == feedId) {
                     feed.copy(commentCount = maxOf(0, feed.commentCount - 1))
                 } else feed
             })
@@ -83,17 +81,17 @@ fun CommunityViewModel.deleteComment(feedId: String, commentId: Int) { // commen
     }
 }
 
-fun CommunityViewModel.toggleCommentLike(feedId: String, commentId: Int) { // commentId는 Int 유지 가정
+fun CommunityViewModel.toggleCommentLike(feedId: String, commentId: Int) {
     viewModelScope.launch {
         try {
-            val updatedComment = api.toggleCommentLike(feedId, commentId) // feedId는 String
+            val updatedComment = api.toggleCommentLike(feedId, commentId)
             val currentCommentsMap = comments.value.toMutableMap()
-            val currentFeedComments = currentCommentsMap[feedId] ?: return@launch // String key 사용
+            val currentFeedComments = currentCommentsMap[feedId] ?: return@launch
 
             val updatedComments = currentFeedComments.map { comment ->
-                if (comment.id == commentId) updatedComment else comment // commentId는 Int 비교
+                if (comment.id == commentId) updatedComment else comment
             }
-            currentCommentsMap[feedId] = updatedComments // String key 사용
+            currentCommentsMap[feedId] = updatedComments
             updateComments(currentCommentsMap)
         } catch (e: Exception) {
             setErrorMessage("좋아요 처리에 실패했습니다: ${e.message}")
@@ -102,11 +100,9 @@ fun CommunityViewModel.toggleCommentLike(feedId: String, commentId: Int) { // co
     }
 }
 
-
 /* ==================== 사용자 관련 확장 함수 ==================== */
 
 fun CommunityViewModel.searchUsers(query: String) {
-    // (기존 코드 동일)
     if (query.isBlank()) {
         updateSearchResults(emptyList())
         return
@@ -123,73 +119,84 @@ fun CommunityViewModel.searchUsers(query: String) {
 }
 
 fun CommunityViewModel.getUserById(userId: String): User? {
-    // (기존 코드 동일 - _users 상태에서 찾는 로직)
     return users.value.find { it.userId == userId }
 }
 
 fun CommunityViewModel.getUserByName(userName: String): User? {
-    // (기존 코드 동일 - _users 상태에서 찾는 로직)
     return users.value.find { it.userName == userName }
 }
 
-// [ 💡 1. 수정: _viewedUserProfile 업데이트 하도록 변경 ]
+// ✅ 수정: getUserProfile API 사용
 fun CommunityViewModel.loadUserProfile(userId: String) {
     viewModelScope.launch {
-        setLoadingProfile(true) // 프로필 로딩 시작
+        setLoadingProfile(true)
         setErrorMessage(null)
         try {
-            val user = api.getUserById(userId) // 백엔드에서 사용자 정보 가져오기
-            updateViewedUserProfile(user) // 가져온 정보로 _viewedUserProfile 상태 업데이트
+            Log.d("CommunityViewModel", "📱 프로필 로드 시작: $userId")
+            val response = api.getUserProfile(userId)
+
+            if (response.isSuccessful) {
+                val user = response.body()
+                updateViewedUserProfile(user)
+                Log.d("CommunityViewModel", "✅ 프로필 로드 성공: ${user?.userName}")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                setErrorMessage("프로필을 불러올 수 없습니다.")
+                updateViewedUserProfile(null)
+                Log.e("CommunityViewModel", "❌ 프로필 로드 실패: ${response.code()}, $errorBody")
+            }
         } catch (e: Exception) {
-            setErrorMessage("사용자 정보를 불러오는데 실패했습니다: ${e.message}")
-            updateViewedUserProfile(null) // 실패 시 null로 설정
-            Log.e("CommunityViewModel", "Error loading user profile", e)
+            setErrorMessage("프로필 로드 중 오류가 발생했습니다: ${e.message}")
+            updateViewedUserProfile(null)
+            Log.e("CommunityViewModel", "❌ 프로필 로드 에러", e)
         } finally {
-            setLoadingProfile(false) // 프로필 로딩 종료
+            setLoadingProfile(false)
         }
     }
 }
 
-// [ 💡 2. 추가: 특정 사용자의 게시글 로드 함수 ]
-// (주의: 이 함수가 작동하려면 백엔드에 /community/users/{userId}/posts 같은 API가 필요합니다)
+// ✅ 수정: getUserPosts API 사용
 fun CommunityViewModel.loadPostsForUser(userId: String) {
     viewModelScope.launch {
-        setLoadingPosts(true) // 게시글 로딩 시작
+        setLoadingPosts(true)
         setErrorMessage(null)
         try {
-            // TODO: 백엔드 API 구현 후 아래 코드 활성화 및 수정
-            // 예시: val posts = api.getPostsByUserId(userId)
-            // updateUserPosts(posts)
+            Log.d("CommunityViewModel", "📝 사용자 게시물 로드 시작: $userId")
+            val response = api.getUserPosts(userId)
 
-            // --- 임시 코드 (실제 API 연결 전까지 빈 목록 표시) ---
-            updateUserPosts(emptyList())
-            Log.d("CommunityViewModel", "Loaded posts for user $userId (placeholder)")
-            // --- 임시 코드 끝 ---
-
+            if (response.isSuccessful) {
+                val posts = response.body() ?: emptyList()
+                updateUserPosts(posts)
+                Log.d("CommunityViewModel", "✅ 사용자 게시물 로드 성공: ${posts.size}개")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                setErrorMessage("게시물을 불러올 수 없습니다.")
+                updateUserPosts(emptyList())
+                Log.e("CommunityViewModel", "❌ 게시물 로드 실패: ${response.code()}, $errorBody")
+            }
         } catch (e: Exception) {
-            setErrorMessage("사용자 게시글을 불러오는데 실패했습니다: ${e.message}")
-            updateUserPosts(emptyList()) // 실패 시 빈 목록
-            Log.e("CommunityViewModel", "Error loading posts for user", e)
+            setErrorMessage("게시물 로드 중 오류가 발생했습니다: ${e.message}")
+            updateUserPosts(emptyList())
+            Log.e("CommunityViewModel", "❌ 게시물 로드 에러", e)
         } finally {
-            setLoadingPosts(false) // 게시글 로딩 종료
+            setLoadingPosts(false)
         }
     }
 }
 
-
 fun CommunityViewModel.toggleFollow(targetUserId: String) {
-    // (기존 코드 동일)
     viewModelScope.launch {
         try {
             val updatedUser = api.toggleFollow(targetUserId)
-            // _users 상태 업데이트 (필요시)
+
             updateUsers(users.value.map { user ->
                 if (user.userId == targetUserId) updatedUser else user
             })
 
-            if (viewedUserProfile.value?.userId == targetUserId) { // 상태 읽기는 public val 사용
+            if (viewedUserProfile.value?.userId == targetUserId) {
                 updateViewedUserProfile(updatedUser)
             }
+
             val currentUserVal = currentUser.value
             updateCurrentUser(currentUserVal?.copy(
                 followingCount = if (updatedUser.isFollowing)
@@ -197,7 +204,7 @@ fun CommunityViewModel.toggleFollow(targetUserId: String) {
                 else
                     maxOf(0, (currentUserVal.followingCount ?: 0) - 1)
             ))
-            // _searchResults 상태 업데이트 (검색 결과에 있다면)
+
             updateSearchResults(searchResults.value.map { user ->
                 if (user.userId == targetUserId) updatedUser else user
             })
@@ -209,6 +216,5 @@ fun CommunityViewModel.toggleFollow(targetUserId: String) {
 }
 
 fun CommunityViewModel.clearSearchResults() {
-    // (기존 코드 동일)
     updateSearchResults(emptyList())
 }

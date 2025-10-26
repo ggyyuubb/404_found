@@ -46,6 +46,7 @@ from recommend.outfits_history import outfits_history_bp
 # Firebase 초기화가 끝났으므로 이제 import해도 안전합니다.
 from community.community_posts import community_posts_bp
 from community.community_social import community_social_bp
+from community.community_user import community_user_bp
 # --- [ 수정 끝 ] ---
 
 
@@ -83,6 +84,7 @@ app.register_blueprint(outfits_history_bp, url_prefix='/api/history')
 # '/'는 기본값이므로 생략해도 됩니다.
 app.register_blueprint(community_posts_bp)
 app.register_blueprint(community_social_bp)
+app.register_blueprint(community_user_bp)
 # --- [ 수정 끝 ] ---
 
 
@@ -98,14 +100,27 @@ def ping():
 @app.route('/auth/firebase/', methods=['POST'])
 def verify_firebase_token():
     id_token = request.headers.get('Authorization')
+    
+    # ✅ 추가: 더 자세한 로깅
+    print(f"🔍 Firebase 인증 시도...")
+    print(f"   Authorization Header: {id_token[:50] if id_token else 'None'}...")
+    
     if not id_token or not id_token.startswith('Bearer '):
+        print("❌ Authorization 헤더 없음 또는 형식 오류")
         return jsonify({"error": "ID token missing"}), 401
 
     token = id_token.split('Bearer ')[1]
+    
     try:
+        print(f"🔍 토큰 검증 중... (길이: {len(token)})")
         decoded_token = auth.verify_id_token(token)
         uid = decoded_token['uid']
         email = decoded_token.get('email', '')
+        
+        print(f"✅ Firebase 토큰 검증 성공!")
+        print(f"   UID: {uid}")
+        print(f"   Email: {email}")
+        
         jwt_token = create_access_token(identity=uid)
         db = app.db
         db.collection('auth_logs').add({
@@ -113,13 +128,32 @@ def verify_firebase_token():
             'uid': uid,
             'timestamp': datetime.utcnow()
         })
+        
+        print(f"✅ JWT 토큰 생성 완료")
         return jsonify({
             "message": "인증 성공",
             "uid": uid,
             "email": email,
             "token": jwt_token
         }), 200
+        
+    except auth.ExpiredIdTokenError as e:
+        print(f"❌ Firebase 토큰 만료: {str(e)}")
+        return jsonify({"error": "Token expired"}), 401
+        
+    except auth.InvalidIdTokenError as e:
+        print(f"❌ Firebase 토큰 무효: {str(e)}")
+        return jsonify({"error": "Invalid token"}), 401
+        
+    except auth.RevokedIdTokenError as e:
+        print(f"❌ Firebase 토큰 취소됨: {str(e)}")
+        return jsonify({"error": "Token revoked"}), 401
+        
     except Exception as e:
+        print(f"❌ Firebase 인증 오류 (예상치 못한 에러): {type(e).__name__}")
+        print(f"   상세 메시지: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 401
 
 @app.route('/')
