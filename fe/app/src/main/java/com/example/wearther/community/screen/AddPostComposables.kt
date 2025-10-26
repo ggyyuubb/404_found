@@ -11,7 +11,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Thermostat
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,25 +137,126 @@ internal fun AddPostForm(
 
         Spacer(Modifier.height(16.dp))
 
-        // 온도/날씨 입력 필드
-        Row(
+        // ✅✅ 현재 날씨 정보 카드 (강조)
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFEFF6FF) // 연한 파란색 배경
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            OutlinedTextField(
-                value = temperature,
-                onValueChange = onTemperatureChange,
-                label = { Text("온도") },
-                placeholder = { Text("예: 18°C") },
-                modifier = Modifier.weight(1f)
-            )
-            OutlinedTextField(
-                value = weather,
-                onValueChange = onWeatherChange,
-                label = { Text("날씨") },
-                placeholder = { Text("예: 맑음") },
-                modifier = Modifier.weight(1f)
-            )
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // 헤더: 현재 날씨 표시
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WbSunny,
+                        contentDescription = null,
+                        tint = Color(0xFF3B82F6),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "현재 날씨 정보",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = Color(0xFF1E40AF)
+                        )
+                        Text(
+                            "자동으로 채워졌습니다 (수정 가능)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF6B7280),
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    // 실시간 아이콘
+                    Surface(
+                        color = Color(0xFF3B82F6).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(0xFF3B82F6),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "실시간",
+                                fontSize = 11.sp,
+                                color = Color(0xFF3B82F6),
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 온도/날씨 입력 필드
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 온도 입력
+                    OutlinedTextField(
+                        value = temperature,
+                        onValueChange = onTemperatureChange,
+                        label = { Text("온도") },
+                        placeholder = { Text("예: 18") },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Thermostat,
+                                contentDescription = null,
+                                tint = Color(0xFF3B82F6)
+                            )
+                        },
+                        suffix = { Text("°C", color = Color(0xFF6B7280)) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFFBFDBFE),
+                            focusedLeadingIconColor = Color(0xFF3B82F6),
+                            unfocusedLeadingIconColor = Color(0xFF93C5FD)
+                        )
+                    )
+
+                    // 날씨 입력
+                    OutlinedTextField(
+                        value = weather,
+                        onValueChange = onWeatherChange,
+                        label = { Text("날씨") },
+                        placeholder = { Text("예: 맑음") },
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = Color(0xFF3B82F6)
+                            )
+                        },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF3B82F6),
+                            unfocusedBorderColor = Color(0xFFBFDBFE),
+                            focusedLeadingIconColor = Color(0xFF3B82F6),
+                            unfocusedLeadingIconColor = Color(0xFF93C5FD)
+                        )
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -163,7 +269,8 @@ internal fun AddPostForm(
         ) {
             FilledTonalButton(
                 enabled = !isUploading,
-                onClick = onTakePhotoClick
+                onClick = onTakePhotoClick,
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Filled.CameraAlt, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
@@ -171,7 +278,8 @@ internal fun AddPostForm(
             }
             OutlinedButton(
                 enabled = !isUploading,
-                onClick = onPickFromGalleryClick
+                onClick = onPickFromGalleryClick,
+                modifier = Modifier.weight(1f)
             ) {
                 Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
