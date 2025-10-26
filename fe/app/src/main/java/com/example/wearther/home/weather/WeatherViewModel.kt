@@ -2,6 +2,7 @@
 // ✅ 현재 위치 기반 날씨 정보를 가져오고, 위치를 주소(도시명 등)로 변환하여 상태로 관리하는 ViewModel입니다.
 // ✅ 날씨 API와 Geocoder를 이용해 데이터를 불러오며, 상태는 StateFlow로 Compose에서 관찰할 수 있도록 구성되어 있습니다.
 // ✅ 위치 선택 기능 추가: 여러 위치를 저장하고 선택할 수 있는 기능이 포함되어 있습니다.
+// ✅ 옷 추천 기능 추가: 날씨 조회 시 자동으로 백엔드에 날씨 데이터를 전송하여 AI 옷 추천을 받습니다.
 
 package com.example.wearther.home.weather
 
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class WeatherViewModel(
     private val context: Context
@@ -31,11 +33,23 @@ class WeatherViewModel(
     private val _savedLocations = MutableStateFlow<List<SavedLocation>>(emptyList())
     val savedLocations: StateFlow<List<SavedLocation>> = _savedLocations.asStateFlow()
 
+    // 👇 옷 추천 상태 추가
+    private val _clothingRecommendation = MutableStateFlow<ClothingRecommendationResponse?>(null)
+    val clothingRecommendation: StateFlow<ClothingRecommendationResponse?> = _clothingRecommendation.asStateFlow()
+
+    // 👇 옷 추천 로딩 상태
+    private val _isLoadingRecommendation = MutableStateFlow(false)
+    val isLoadingRecommendation: StateFlow<Boolean> = _isLoadingRecommendation.asStateFlow()
+
+    // 👇 현재 위치 저장 (옷 추천 요청 시 사용)
+    private var currentLatitude: Double = 0.0
+    private var currentLongitude: Double = 0.0
+
     // ✅ 위치 관련 Repository들
     private val locationRepository = LocationRepository(context)
     private val locationSearchRepository = LocationSearchRepository(
         geocodingApi = RetrofitClient.geocodingApiService,
-        apiKey = "9f77037105f413b870f9c9f2c1a2fb32" // 기존 WeatherApiService와 동일한 API 키 사용
+        apiKey = "9f77037105f413b870f9c9f2c1a2fb32"
     )
 
     init {
@@ -44,13 +58,17 @@ class WeatherViewModel(
 
     /**
      * ✅ 위도와 경도를 기반으로 날씨 정보를 서버에서 가져옵니다.
-     * - RetrofitClient를 통해 API 호출
-     * - 성공하면 StateFlow에 데이터 저장
-     * - daily 데이터가 null이거나 비어 있으면 로그 출력 (UI에서도 처리 필요)
+     * 👉 수정됨: 날씨 조회 성공 시 자동으로 옷 추천도 요청합니다.
      */
     fun fetchWeather(lat: Double, lon: Double) {
         viewModelScope.launch {
             try {
+                // 위치 저장
+                currentLatitude = lat
+                currentLongitude = lon
+
+                Log.d("WeatherVM", "🌡️ 날씨 조회 시작: lat=$lat, lon=$lon")
+
                 val response = RetrofitClient.apiService.getWeather(lat, lon)
                 if (response.isSuccessful) {
                     response.body()?.let { body ->
@@ -58,11 +76,106 @@ class WeatherViewModel(
                             Log.e("WeatherVM", "❗ daily 예보가 없습니다. UI에서도 안전하게 표시됨")
                         }
                         _weatherData.value = body
+
+                        Log.d("WeatherVM", "✅ 날씨 조회 성공")
+                        Log.d("WeatherVM", "   - 온도: ${body.current.temp}°C")
+                        Log.d("WeatherVM", "   - 날씨: ${body.current.weather.firstOrNull()?.main}")
+
+                        // 👇 날씨 조회 성공하면 바로 옷 추천 요청
+                        fetchClothingRecommendation(body, _locationText.value)
                     }
+                } else {
+                    Log.e("WeatherVM", "❌ 날씨 조회 실패: ${response.code()}")
                 }
             } catch (e: Exception) {
                 Log.e("WeatherVM", "API 호출 오류: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * 👇 새로 추가: 옷 추천 요청
+     * 날씨 데이터 + 위치 정보를 백엔드로 전송하여 AI 옷 추천을 받습니다.
+     */
+    private fun fetchClothingRecommendation(
+        weatherData: WeatherResponse,
+        locationName: String
+    ) {
+        viewModelScope.launch {
+            _isLoadingRecommendation.value = true
+
+            try {
+                Log.d("WeatherVM", "👔 옷 추천 요청 시작")
+
+                // 기존 WeatherResponse에서 필요한 데이터만 추출
+                val weatherInfo = WeatherInfoForBackend(
+                    temp = weatherData.current.temp,
+                    feelsLike = weatherData.current.feels_like,
+                    humidity = weatherData.current.humidity,
+                    weather = weatherData.current.weather.firstOrNull()?.main ?: "Unknown",
+                    description = weatherData.current.weather.firstOrNull()?.description ?: "",
+                    windSpeed = weatherData.current.wind_speed,
+                    timestamp = System.currentTimeMillis().toString()
+                )
+
+                val request = ClothingRecommendationRequest(
+                    location = locationName,
+                    weather = weatherInfo,
+                    day_index = 0  // 오늘 기준
+                )
+
+                Log.d("WeatherVM", "📤 요청 데이터:")
+                Log.d("WeatherVM", "   - 위치: $locationName")
+                Log.d("WeatherVM", "   - 온도: ${weatherInfo.temp}°C")
+                Log.d("WeatherVM", "   - 날씨: ${weatherInfo.weather}")
+
+                // JWT 토큰 가져오기
+                val token = getJwtToken()
+
+                if (token.isNullOrEmpty()) {
+                    Log.e("WeatherVM", "❌ JWT 토큰 없음")
+                    _clothingRecommendation.value = null
+                    return@launch
+                }
+
+                // 백엔드에 옷 추천 요청
+                val response = RetrofitClient.clothingRecommendationService
+                    .getRecommendation(request, "Bearer $token")
+
+                if (response.isSuccessful) {
+                    response.body()?.let { result ->
+                        _clothingRecommendation.value = result
+                        Log.d("WeatherVM", "✅ 옷 추천 성공!")
+                        Log.d("WeatherVM", "   - 상의: ${result.recommended?.top}")
+                        Log.d("WeatherVM", "   - 하의: ${result.recommended?.bottom}")
+                        Log.d("WeatherVM", "   - 아우터: ${result.recommended?.outer}")
+                    }
+                } else {
+                    Log.e("WeatherVM", "❌ 옷 추천 실패: ${response.code()}")
+                    Log.e("WeatherVM", "   - 에러: ${response.errorBody()?.string()}")
+                    _clothingRecommendation.value = null
+                }
+
+            } catch (e: Exception) {
+                Log.e("WeatherVM", "💥 옷 추천 요청 오류: ${e.message}")
+                e.printStackTrace()
+                _clothingRecommendation.value = null
+            } finally {
+                _isLoadingRecommendation.value = false
+            }
+        }
+    }
+
+    /**
+     * 👇 JWT 토큰 가져오기 (Firebase Auth 사용)
+     */
+    private suspend fun getJwtToken(): String? {
+        return try {
+            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            user?.getIdToken(false)?.await()?.token
+        } catch (e: Exception) {
+            Log.e("WeatherVM", "토큰 가져오기 실패: ${e.message}")
+            null
         }
     }
 
@@ -94,10 +207,11 @@ class WeatherViewModel(
 
     /**
      * ✅ 날씨 데이터를 초기화합니다.
-     * - 새로고침 또는 위치 변경 시 호출
+     * 👉 수정됨: 옷 추천 데이터도 함께 초기화합니다.
      */
     fun clearWeather() {
         _weatherData.value = null
+        _clothingRecommendation.value = null  // 👈 추가
     }
 
     // ==================== 위치 선택 기능 ====================
@@ -133,16 +247,15 @@ class WeatherViewModel(
     /**
      * ✅ 저장된 위치를 삭제합니다.
      */
-    // 삭제 함수 추가 필요
-    // WeatherViewModel.kt에서
     fun deleteLocation(locationId: String) {
-        locationRepository.removeLocation(locationId) // 👈 이렇게 변경
+        locationRepository.removeLocation(locationId)
         loadSavedLocations()
         Log.d("WeatherVM", "위치 삭제됨: ID = $locationId")
     }
 
     /**
      * ✅ 위치를 선택하여 해당 위치의 날씨를 불러옵니다.
+     * 👉 수정됨: 날씨 조회 후 자동으로 옷 추천도 업데이트됩니다.
      */
     fun selectLocation(location: SavedLocation) {
         viewModelScope.launch {
@@ -168,6 +281,7 @@ class WeatherViewModel(
 
     /**
      * ✅ 현재 위치를 기반으로 날씨와 주소를 모두 가져옵니다.
+     * 👉 수정됨: 날씨 조회 후 자동으로 옷 추천도 업데이트됩니다.
      */
     fun fetchCurrentLocationWeather() {
         viewModelScope.launch {

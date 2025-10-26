@@ -1,5 +1,6 @@
 package com.example.wearther.closet.screen
 
+import androidx.compose.foundation.background // ⭐️ background 임포트
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -9,13 +10,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.wearther.closet.data.ClosetImage
-import com.example.wearther.closet.data.ClosetSortUtils   // ✅ 하위 카테고리 한글화
+import com.example.wearther.closet.data.ClosetSortUtils
+import com.example.wearther.closet.data.ClosetListItem
 
 @Composable
 fun ClosetViewSwitcher(
@@ -25,10 +26,14 @@ fun ClosetViewSwitcher(
     var isGridView by remember { mutableStateOf(true) }
     var selectedItem by remember { mutableStateOf<ClosetImage?>(null) }
 
+    // ⭐️ 선으로 사용할 색상
+    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+
     Column {
-        // 뷰 전환 버튼
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(onClick = { isGridView = !isGridView }) {
@@ -41,67 +46,65 @@ fun ClosetViewSwitcher(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // 뷰 전환
         if (isGridView) {
-            // 2열 그리드
+            // ⭐️ [수정됨] 그리드 뷰에 '선' 추가
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .fillMaxSize()
+                    .background(lineColor), // ⭐️ 1. 그리드 전체 배경을 '선 색상'으로
+                horizontalArrangement = Arrangement.spacedBy(1.dp), // ⭐️ 2. 1dp 틈 (선)
+                verticalArrangement = Arrangement.spacedBy(1.dp),   // ⭐️ 2. 1dp 틈 (선)
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(items) { item ->
-                    // ✅ ItemCard 시그니처에 맞게 수정
+                    // (ItemCard.kt의 배경색은 surface여야 함)
+                    val subKo = ClosetSortUtils.toKorean(item.category)
+                    val mainKo = ClosetSortUtils.getMainCategory(subKo)
+
                     ItemCard(
-                        imageUrl    = item.url,
-                        bigCategory = item.type?.takeIf { it.isNotBlank() },
-                        subCategory = item.category?.let { ClosetSortUtils.toKorean(it) },
-                        // colorName = item.color,  // 모델에 색상 이름 필드가 생기면 주석 해제
-                        onClick = { selectedItem = item },
-                        onDelete = { onDelete(item) }
+                        imageUrl = item.url,
+                        bigCategory = mainKo,
+                        subCategory = subKo,
+                        colorNames = item.colors,
+                        onClick = { selectedItem = item }
                     )
                 }
             }
         } else {
-            // 1열 리스트
+            // ⭐️ [유지] 리스트 뷰는 Divider로 선을 그림
             LazyColumn(
                 modifier = Modifier
-                    .padding(16.dp)
                     .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.Top,
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
                 items(items) { item ->
-                    // ✅ 영어 세부카테고리 → 한글
-                    val subKo  = ClosetSortUtils.toKorean(item.category)
-                    // ✅ 한글 세부카테고리 → 대분류
+                    val subKo = ClosetSortUtils.toKorean(item.category)
                     val mainKo = ClosetSortUtils.getMainCategory(subKo)
 
-                    ItemCard(
-                        imageUrl    = item.url,
-                        bigCategory = mainKo,          // ← 재계산된 대분류
-                        subCategory = subKo,           // ← 한글 세부카테고리
-                        colorNames  = item.colors,     // ← 색상 리스트가 있으면 스와치 표시 (없으면 생략 가능)
-                        onClick = { selectedItem = item },
-                        onDelete = { onDelete(item) }
+                    ClosetListItem(
+                        imageUrl = item.url,
+                        bigCategory = mainKo,
+                        subCategory = subKo,
+                        colorNames = item.colors,
+                        material = item.material,
+                        uploaded_at = item.uploaded_at, // ⭐️ 이 줄을 추가해야 합니다!
+                        onClick = { selectedItem = item }
                     )
+                    // ⭐️ 리스트 아이템 사이에 구분선
+                    Divider(color = lineColor, thickness = 1.dp)
                 }
-
             }
         }
     }
 
-    // 상세 다이얼로그
     selectedItem?.let { item ->
         ClothingDetailDialog(
             item = item,
             onDismiss = { selectedItem = null },
-            onDelete = {
-                onDelete(item)
-                selectedItem = null
+            onUpdate = { imageId, category, colors, material, temperature ->
+                // ViewModel의 updateImage 호출 (이미 있는 로직)
             }
         )
     }

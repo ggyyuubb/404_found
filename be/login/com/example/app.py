@@ -3,6 +3,10 @@
 #flask run --host=0.0.0.0 --port=5000
 
 import os
+import sys
+# 🔥 추가: Python 경로 설정
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from flask import Flask, render_template, request, jsonify, current_app
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token
@@ -17,8 +21,10 @@ from com.example.userEdit import user_edit_bp
 from upload.image import image_bp
 from recommend.recommendation import recommendation_bp
 from recommend.outfits_history import outfits_history_bp
-from community.community import community_bp
 
+# 🔥 수정된 import
+from community.community_posts import community_posts_bp
+from community.community_social import community_social_bp
 
 app = Flask(__name__)
 
@@ -52,9 +58,12 @@ app.register_blueprint(login_bp)
 app.register_blueprint(register_bp)
 app.register_blueprint(user_edit_bp)
 app.register_blueprint(image_bp, url_prefix='/upload')
-app.register_blueprint(recommendation_bp, url_prefix='/api/recommend')   # 변경
-app.register_blueprint(outfits_history_bp, url_prefix='/api/history')    # 변경
-app.register_blueprint(community_bp, url_prefix='/')
+app.register_blueprint(recommendation_bp, url_prefix='/api/recommend')
+app.register_blueprint(outfits_history_bp, url_prefix='/api/history')
+
+# 🔥 수정: 두 개의 커뮤니티 Blueprint 등록
+app.register_blueprint(community_posts_bp, url_prefix='/')
+app.register_blueprint(community_social_bp, url_prefix='/')
 
 @app.before_request
 def log_auth_header():
@@ -100,7 +109,6 @@ def index():
 def recommendation_page():
     return render_template('recommendation.html')
 
-# 잘못된 경로로 진입할 경우 자동 리디렉션
 @app.route('/api/recommendations/same_day', methods=['GET'])
 def redirect_to_correct_history_page():
     print("🔁 잘못된 GET 요청 → /api/history/outfits_history 로 리디렉션합니다.")

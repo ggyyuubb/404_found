@@ -1,5 +1,7 @@
 package com.example.wearther.closet.data
 
+import com.google.gson.annotations.SerializedName
+
 // -------------------------------------
 // 공통 베이스: type=대분류 / category=세부분류
 // -------------------------------------
@@ -19,7 +21,10 @@ data class ClosetImage(
     override val id: String,
     val filename: String? = "",
     val url: String,
+
+    @SerializedName("uploaded_at") // ⭐️ 이 줄 추가!
     val uploaded_at: String? = "",
+
     override val type: String? = "",
     override val category: String? = "",
     override val colors: List<String>? = emptyList(),
@@ -67,28 +72,3 @@ fun FashionItem.toClosetImage(): ClosetImage = ClosetImage(
     suitable_temperature = suitable_temperature ?: ""
 )
 
-// -------------------------------------
-// 오타 방지 상수
-// -------------------------------------
-object ClothingTypes {
-    const val TOP = "상의"
-    const val BOTTOM = "하의"
-    const val OUTER = "아우터"
-    const val DRESS = "원피스"
-}
-
-object TopCategories {
-    val ALL = listOf("티셔츠", "맨투맨", "후드", "셔츠", "블라우스", "니트", "스웨터", "긴소매", "반소매", "민소매")
-}
-
-object BottomCategories {
-    val ALL = listOf("데님", "트레이닝", "코튼", "슬랙스", "레깅스", "숏팬츠", "스커트")
-}
-
-object OuterCategories {
-    val ALL = listOf("후드집업", "자켓", "코트", "패딩", "플리스")
-}
-
-object DressCategories {
-    val ALL = listOf("숏원피스", "미디움원피스", "롱원피스", "점프슈트")
-}

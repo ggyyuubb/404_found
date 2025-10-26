@@ -34,22 +34,22 @@ fun PhotoSourceSelectionDialog(
     val context = LocalContext.current
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // 갤러리 런처
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            onImageSelected(it)
-            onDismiss()
-        }
-    }
-
     // 카메라 런처
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraImageUri != null) {
             onImageSelected(cameraImageUri!!)
+            onDismiss()
+        }
+    }
+
+    // 갤러리 런처
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            onImageSelected(it)
             onDismiss()
         }
     }
@@ -62,13 +62,14 @@ fun PhotoSourceSelectionDialog(
                 "IMG_${System.currentTimeMillis()}.jpg"
             )
 
-            cameraImageUri = FileProvider.getUriForFile(
+            val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
                 photoFile
             )
 
-            cameraLauncher.launch(cameraImageUri)
+            cameraImageUri = uri
+            cameraLauncher.launch(uri)
         } catch (e: Exception) {
             Toast.makeText(context, "카메라 실행 중 오류가 발생했습니다", Toast.LENGTH_SHORT).show()
         }
@@ -179,6 +180,42 @@ fun PhotoSourceSelectionDialog(
                 }
 
                 Divider(modifier = Modifier.padding(top = 8.dp))
+
+                // 🔹 팁 카드
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "촬영 TIP",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "• 옷을 평평하게 펼쳐서 촬영해주세요\n• 옷을 정중앙에 배치하면 정확도가 높아집니다\n• 사람이 입지 않은 상태가 더 정확합니다",
+                                fontSize = 11.sp,
+                                color = Color.DarkGray,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
 
                 // 🔹 취소 버튼
                 TextButton(

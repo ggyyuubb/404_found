@@ -47,6 +47,11 @@
             </intent-filter>
         </activity>
 
+        <!-- 크롭 액티비티 추가 -->
+        <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Base.Theme.AppCompat" />
+
         <!-- 파일 프로바이더 (카메라 사진 저장용) -->
         <provider
             android:name="androidx.core.content.FileProvider"

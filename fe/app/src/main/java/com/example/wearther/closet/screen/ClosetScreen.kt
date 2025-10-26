@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,24 +25,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.wearther.closet.data.ClosetImage
 import com.example.wearther.closet.data.ClosetViewModel
 import com.example.wearther.closet.data.ClosetViewModelFactory
 import com.example.wearther.closet.data.ClosetSortUtils
-import com.example.wearther.closet.upload.UpdateClothingRequest
+import com.example.wearther.closet.data.ClosetListItem
 import com.example.wearther.remote.BASE_URL
 import com.example.wearther.remote.getStoredJwtToken
 import com.example.wearther.ui.screens.closet.components.CategoryTabs
 import com.example.wearther.ui.screens.closet.components.Header
-import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import java.io.File
 
 @Composable
 fun ClosetScreen(
@@ -70,14 +69,20 @@ fun ClosetScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    // ✅ UI State (ViewModel에 없는 것들)
+    // ✅ UI State
     var isGridView by remember { mutableStateOf(true) }
     var selectedItem by remember { mutableStateOf<ClosetImage?>(null) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var itemToDelete by remember { mutableStateOf<ClosetImage?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
 
-    val coroutineScope = rememberCoroutineScope()
+    // ⭐️ 삭제 모드 관련 state
+    var isDeleteMode by remember { mutableStateOf(false) }
+    var selectedItemsForDelete by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    // ⭐️ 스크롤 상태 저장
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+
     val topCategories = listOf("전체", "상의", "하의", "아우터", "원피스")
 
     // ✅ 에러 표시
@@ -134,9 +139,12 @@ fun ClosetScreen(
             // ✅ 빈 상태
             else if (filteredItems.isEmpty()) {
                 EmptyState()
-            } else if (isGridView) {
+            }
+            // ✅ 그리드 뷰
+            else if (isGridView) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    state = gridState,
                     modifier = Modifier
                         .padding(horizontal = 16.dp, vertical = 16.dp)
                         .fillMaxSize(),
@@ -144,83 +152,218 @@ fun ClosetScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredItems) { item ->
+                    items(
+                        items = filteredItems,
+                        key = { it.id }
+                    ) { item ->
                         val subKo = ClosetSortUtils.toKorean(item.category)
                         val mainKo = ClosetSortUtils.getMainCategory(subKo)
-                        com.example.wearther.closet.screen.ItemCard(
-                            imageUrl = item.url,
-                            bigCategory = mainKo,
-                            subCategory = subKo,
-                            colorNames = item.colors,
-                            onClick = { selectedItem = item },
-                            onDelete = {
-                                itemToDelete = item
-                                showDeleteDialog = true
+
+                        Box {
+                            ItemCard(
+                                imageUrl = item.url,
+                                bigCategory = mainKo,
+                                subCategory = subKo,
+                                colorNames = item.colors,
+                                onClick = {
+                                    if (isDeleteMode) {
+                                        // 삭제 모드: 선택/해제
+                                        selectedItemsForDelete = if (selectedItemsForDelete.contains(item.id)) {
+                                            selectedItemsForDelete - item.id
+                                        } else {
+                                            selectedItemsForDelete + item.id
+                                        }
+                                    } else {
+                                        // 일반 모드: 상세보기
+                                        selectedItem = item
+                                    }
+                                }
+                            )
+
+                            // ⭐️ 삭제 모드일 때 체크박스 표시
+                            if (isDeleteMode) {
+                                Checkbox(
+                                    checked = selectedItemsForDelete.contains(item.id),
+                                    onCheckedChange = {
+                                        selectedItemsForDelete = if (it) {
+                                            selectedItemsForDelete + item.id
+                                        } else {
+                                            selectedItemsForDelete - item.id
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
             // ✅ 리스트 뷰
             else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .padding(16.dp)
                         .fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
-                    items(filteredItems) { item ->
+                    items(
+                        items = filteredItems,
+                        key = { it.id }
+                    ) { item ->
+                        val subKo = ClosetSortUtils.toKorean(item.category)
+                        val mainKo = ClosetSortUtils.getMainCategory(subKo)
+
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AsyncImage(
-                                model = item.url,
-                                contentDescription = "옷 이미지",
-                                modifier = Modifier.size(80.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = item.type ?: "미분류",
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Text(
-                                    text = ClosetSortUtils.toKorean(item.category),
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color.Gray
+                            // ⭐️ 삭제 모드일 때 체크박스
+                            if (isDeleteMode) {
+                                Checkbox(
+                                    checked = selectedItemsForDelete.contains(item.id),
+                                    onCheckedChange = {
+                                        selectedItemsForDelete = if (it) {
+                                            selectedItemsForDelete + item.id
+                                        } else {
+                                            selectedItemsForDelete - item.id
+                                        }
+                                    }
                                 )
                             }
-                            Spacer(modifier = Modifier.weight(1f))
-                            TextButton(
+
+                            ClosetListItem(
+                                imageUrl = item.url,
+                                bigCategory = mainKo,
+                                subCategory = subKo,
+                                colorNames = item.colors,
+                                material = item.material,
+                                uploaded_at = item.uploaded_at,
                                 onClick = {
-                                    itemToDelete = item
-                                    showDeleteDialog = true
+                                    if (isDeleteMode) {
+                                        selectedItemsForDelete = if (selectedItemsForDelete.contains(item.id)) {
+                                            selectedItemsForDelete - item.id
+                                        } else {
+                                            selectedItemsForDelete + item.id
+                                        }
+                                    } else {
+                                        selectedItem = item
+                                    }
                                 }
-                            ) {
-                                Text("삭제", color = MaterialTheme.colorScheme.error)
-                            }
+                            )
                         }
                     }
                 }
             }
         }
 
-        // ✅ FAB (옷 추가)
-        FloatingActionButton(
-            onClick = { showPhotoDialog = true },
+        // ⭐️ 우측 하단 버튼들
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
-            containerColor = Color.Black,
-            contentColor = Color.White
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = "옷 추가하기")
+            // 삭제 모드일 때
+            if (isDeleteMode) {
+                // 선택된 개수 표시
+                if (selectedItemsForDelete.isNotEmpty()) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                        color = Color.White.copy(alpha = 0.95f),
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = "${selectedItemsForDelete.size}개 선택",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // 삭제하기 버튼
+                if (selectedItemsForDelete.isNotEmpty()) {
+                    FloatingActionButton(
+                        onClick = { showDeleteConfirmDialog = true },
+                        containerColor = Color.Red.copy(alpha = 0.9f),
+                        contentColor = Color.White
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "삭제하기"
+                        )
+                    }
+                }
+
+                // 취소 버튼
+                FloatingActionButton(
+                    onClick = {
+                        isDeleteMode = false
+                        selectedItemsForDelete = emptySet()
+                    },
+                    containerColor = Color.White.copy(alpha = 0.9f),
+                    contentColor = Color.Black
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "취소"
+                    )
+                }
+            }
+            // 일반 모드일 때
+            else {
+                // 휴지통 버튼 (삭제 모드 진입)
+                FloatingActionButton(
+                    onClick = { isDeleteMode = true },
+                    containerColor = Color.White.copy(alpha = 0.9f),
+                    contentColor = Color.Black
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "삭제 모드"
+                    )
+                }
+
+                // + 버튼 (옷 추가)
+                FloatingActionButton(
+                    onClick = { showPhotoDialog = true },
+                    containerColor = Color.White.copy(alpha = 0.9f),
+                    contentColor = Color.Black
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "옷 추가하기"
+                    )
+                }
+            }
         }
+    }
+
+    // ⭐️ 삭제 확인 다이얼로그
+    if (showDeleteConfirmDialog) {
+        DeleteConfirmDialog(
+            selectedCount = selectedItemsForDelete.size,
+            onConfirm = {
+                // 삭제 실행
+                selectedItemsForDelete.forEach { imageId ->
+                    viewModel.deleteImage(
+                        imageId = imageId,
+                        onSuccess = {},
+                        onError = { errorMsg ->
+                            Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+                showDeleteConfirmDialog = false
+                isDeleteMode = false
+                selectedItemsForDelete = emptySet()
+                Toast.makeText(context, "삭제되었습니다", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showDeleteConfirmDialog = false }
+        )
     }
 
     // ✅ 사진 선택 다이얼로그
@@ -229,124 +372,41 @@ fun ClosetScreen(
             onDismiss = { showPhotoDialog = false },
             onImageSelected = { uri ->
                 showPhotoDialog = false
-                coroutineScope.launch {
-                    try {
-                        val file = uriToFile(context, uri)
-                        val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
-                        val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
-
-                        Toast.makeText(context, "AI 분석 중...", Toast.LENGTH_SHORT).show()
-
-                        val uploadApi = retrofit.create(com.example.wearther.closet.upload.UploadApi::class.java)
-                        val response = uploadApi.uploadImage(
-                            token = tokenHeader,
-                            image = imagePart
-                        )
-
-                        file.delete()
-
-                        Toast.makeText(context, "AI가 자동으로 분류 완료!", Toast.LENGTH_SHORT).show()
-                        viewModel.fetchClosetImages()
-
-                    } catch (e: Exception) {
-                        Log.e("ClosetScreen", "업로드 실패", e)
-                        Toast.makeText(context, "업로드 실패: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
+                onNavigateToUpload(uri)
             }
         )
     }
 
-    // ✅ 상세 정보 다이얼로그 - 수정 기능 연결
-    selectedItem?.let { item ->
-        ClothingDetailDialog(
-            item = item,
-            onDismiss = { selectedItem = null },
-            onDelete = {
-                viewModel.deleteImage(
-                    imageId = item.id,
-                    onSuccess = {
-                        selectedItem = null
-                        Toast.makeText(context, "삭제되었습니다", Toast.LENGTH_SHORT).show()
-                    },
-                    onError = { error ->
-                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                    }
-                )
-            },
-            // ✅ 수정 기능 - ViewModel의 updateImage() 사용
-            onUpdate = { categoryEn, colorsEn, material, temperature ->
-                Log.d("ClosetScreen", "========== 수정 시작 ==========")
-                Log.d("ClosetScreen", "categoryEn: $categoryEn")
-                Log.d("ClosetScreen", "colorsEn: $colorsEn")
-                Log.d("ClosetScreen", "material: $material")
-                Log.d("ClosetScreen", "temperature: $temperature")
+    // ✅ 상세 정보 다이얼로그 (삭제 모드가 아닐 때만)
+    if (!isDeleteMode) {
+        selectedItem?.let { item ->
+            ClothingDetailDialog(
+                item = item,
+                onDismiss = { selectedItem = null },
+                onUpdate = { imageId, categoryEn, colorsEn, material, temperature ->
+                    Log.d("ClosetScreen", "========== 수정 시작 ==========")
+                    Log.d("ClosetScreen", "imageId: $imageId")
+                    Log.d("ClosetScreen", "categoryEn: $categoryEn")
+                    Log.d("ClosetScreen", "colorsEn: $colorsEn")
+                    Log.d("ClosetScreen", "material: $material")
+                    Log.d("ClosetScreen", "temperature: $temperature")
 
-                viewModel.updateImage(
-                    imageId = item.id,
-                    category = categoryEn,      // 영문 세부 카테고리
-                    colors = colorsEn,          // 영문 색상 배열 ["Blue", "Gray"]
-                    material = material,
-                    temperature = temperature,
-                    onSuccess = {
-                        selectedItem = null
-                        Toast.makeText(context, "정보가 업데이트되었습니다!", Toast.LENGTH_SHORT).show()
-                    },
-                    onError = { errorMsg ->
-                        Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                    }
-                )
-            }
-        )
-    }
-
-    // ✅ 삭제 확인 다이얼로그
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showDeleteDialog = false
-                itemToDelete = null
-            },
-            title = { Text("옷 삭제", fontWeight = FontWeight.Bold) },
-            text = { Text("이 옷을 삭제하시겠습니까?\n삭제한 옷은 복구할 수 없습니다.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        itemToDelete?.let { item ->
-                            viewModel.deleteImage(
-                                imageId = item.id,
-                                onSuccess = {
-                                    Toast.makeText(context, "삭제되었습니다", Toast.LENGTH_SHORT).show()
-                                },
-                                onError = { error ->
-                                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                                }
-                            )
+                    viewModel.updateImage(
+                        imageId = imageId,
+                        category = categoryEn,
+                        colors = colorsEn,
+                        material = material,
+                        temperature = temperature,
+                        onSuccess = {
+                            selectedItem = null
+                            Toast.makeText(context, "정보가 업데이트되었습니다!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { errorMsg ->
+                            Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                         }
-                        showDeleteDialog = false
-                        itemToDelete = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("삭제")
+                    )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    itemToDelete = null
-                }) {
-                    Text("취소")
-                }
-            }
-        )
+            )
+        }
     }
-}
-
-private fun uriToFile(context: android.content.Context, uri: Uri): File {
-    val file = File(context.cacheDir, "temp_${System.currentTimeMillis()}.jpg")
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        file.outputStream().use { output -> input.copyTo(output) }
-    }
-    return file
 }

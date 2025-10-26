@@ -31,7 +31,7 @@ fun SearchUserScreen(navController: NavController) {
 
     var searchQuery by remember { mutableStateOf("") }
     val searchResults by viewModel.searchResults.collectAsState()
-    val allUsers = remember { viewModel.getAllUsers() }
+    val allUsers by viewModel.users.collectAsState() // ⭐️ getAllUsers() 대신 users StateFlow 사용
 
     Scaffold(
         topBar = {
@@ -277,4 +277,3 @@ private fun UserListItem(
         }
     }
 }
-
