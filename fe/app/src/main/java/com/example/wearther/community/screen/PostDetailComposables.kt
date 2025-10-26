@@ -200,14 +200,14 @@ internal fun PostContentCard(
     }
 }
 
-// --- 4. 게시글 헤더 ---
+// --- 4. 게시글 헤더 --- (209번 줄)
 @Composable
 private fun PostHeader(
     userName: String,
-    profileImageUrl: String?, // Nullable 처리
+    profileImageUrl: String?,
     postTime: String,
-    temperature: String,
-    weather: String
+    temperature: String?,  // ✅ nullable로 변경
+    weather: String?       // ✅ nullable로 변경
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +216,7 @@ private fun PostHeader(
         // TODO: Coil 등으로 실제 프로필 이미지 로드
         Box(
             modifier = Modifier
-                .size(40.dp) // 크기 약간 줄임
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6)))),
             contentAlignment = Alignment.Center
@@ -229,19 +229,22 @@ private fun PostHeader(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 userName,
-                fontWeight = FontWeight.SemiBold, // Bold -> SemiBold
-                fontSize = 15.sp, // 크기 약간 줄임
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
                 color = Color(0xFF111827)
             )
             Text(
-                postTime, // TODO: 시간 포맷 변경 (e.g., "5분 전")
-                fontSize = 12.sp, // 크기 약간 줄임
+                postTime,
+                fontSize = 12.sp,
                 color = Color(0xFF9CA3AF)
             )
         }
 
         // 날씨 배지
-        WeatherBadge(temperature = temperature, weather = weather)
+        WeatherBadge(
+            temperature = temperature ?: "N/A",  // ✅ null 처리
+            weather = weather ?: "N/A"           // ✅ null 처리
+        )
     }
 }
 

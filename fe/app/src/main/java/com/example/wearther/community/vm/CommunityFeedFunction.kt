@@ -34,12 +34,37 @@ fun CommunityViewModel.loadFeeds() {
 fun CommunityViewModel.toggleLike(feedId: String) {
     viewModelScope.launch {
         try {
-            val updatedFeed = api.toggleLike(feedId)
+            // 1️⃣ 먼저 UI를 즉시 업데이트 (낙관적 업데이트)
             val currentFeeds = feeds.value
-            updateFeeds(currentFeeds.map { feed ->
-                if (feed.id == feedId) updatedFeed else feed
-            })
+            val updatedFeeds = currentFeeds.map { feed ->
+                if (feed.id == feedId) {
+                    feed.copy(
+                        likeCount = if (feed.isLiked) feed.likeCount - 1 else feed.likeCount + 1,
+                        isLiked = !feed.isLiked
+                    )
+                } else {
+                    feed
+                }
+            }
+            updateFeeds(updatedFeeds)
+
+            // 2️⃣ 서버에 요청만 보냄 (응답은 무시)
+            api.toggleLike(feedId)
+
         } catch (e: Exception) {
+            // 3️⃣ 실패하면 원래대로 되돌림
+            val currentFeeds = feeds.value
+            val revertedFeeds = currentFeeds.map { feed ->
+                if (feed.id == feedId) {
+                    feed.copy(
+                        likeCount = if (feed.isLiked) feed.likeCount - 1 else feed.likeCount + 1,
+                        isLiked = !feed.isLiked
+                    )
+                } else {
+                    feed
+                }
+            }
+            updateFeeds(revertedFeeds)
             setErrorMessage("좋아요 처리에 실패했습니다: ${e.message}")
             Log.e("CommunityViewModel", "Error toggling like", e)
         }
