@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.wearther.community.data.User
 import com.example.wearther.community.vm.CommunityViewModel
+import com.example.wearther.community.vm.clearSearchResults
+import com.example.wearther.community.vm.searchUsers
+import com.example.wearther.community.vm.toggleFollow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

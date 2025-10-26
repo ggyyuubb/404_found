@@ -10,12 +10,13 @@ import retrofit2.http.*
 /* ===================== API 인터페이스 ===================== */
 
 interface CommunityApi {
-    // 피드 관련
+    // --- 피드 관련 ---
     @GET("community/posts")
     suspend fun getFeeds(): List<FeedItem>
 
+    // [ 💡 수정: Int -> String ]
     @POST("community/posts/{feedId}/like")
-    suspend fun toggleLike(@Path("feedId") feedId: Int): FeedItem
+    suspend fun toggleLike(@Path("feedId") feedId: String): FeedItem
 
     @POST("community/posts")
     suspend fun createFeed(@Body request: CreateFeedRequest): FeedItem
@@ -29,32 +30,37 @@ interface CommunityApi {
         @Part("weather") weather: RequestBody
     ): FeedItem
 
+    // [ 💡 수정: Int -> String ]
     @DELETE("community/posts/{feedId}")
-    suspend fun deleteFeed(@Path("feedId") feedId: Int)
+    suspend fun deleteFeed(@Path("feedId") feedId: String)
 
-    // 댓글 관련
+    // --- 댓글 관련 ---
+    // [ 💡 수정: Int -> String ]
     @GET("community/posts/{feedId}/comments")
-    suspend fun getComments(@Path("feedId") feedId: Int): List<Comment>
+    suspend fun getComments(@Path("feedId") feedId: String): List<Comment>
 
+    // [ 💡 수정: Int -> String ]
     @POST("community/posts/{feedId}/comments")
     suspend fun addComment(
-        @Path("feedId") feedId: Int,
+        @Path("feedId") feedId: String,
         @Body comment: CommentRequest
     ): Comment
 
+    // [ 💡 수정: Int -> String ] (commentId는 Int 유지 가정)
     @DELETE("community/posts/{feedId}/comments/{commentId}")
     suspend fun deleteComment(
-        @Path("feedId") feedId: Int,
+        @Path("feedId") feedId: String,
         @Path("commentId") commentId: Int
     )
 
+    // [ 💡 수정: Int -> String ] (commentId는 Int 유지 가정)
     @POST("community/posts/{feedId}/comments/{commentId}/like")
     suspend fun toggleCommentLike(
-        @Path("feedId") feedId: Int,
+        @Path("feedId") feedId: String,
         @Path("commentId") commentId: Int
     ): Comment
 
-    // 사용자 관련 (아직 백엔드에 없음 - 다음 단계에서 추가 예정)
+    // --- 사용자 관련 --- (String ID 사용 중이므로 수정 불필요)
     @GET("community/users/search")
     suspend fun searchUsers(@Query("query") query: String): List<User>
 

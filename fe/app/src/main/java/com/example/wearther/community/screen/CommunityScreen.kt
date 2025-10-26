@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.wearther.community.vm.CommunityViewModel
+import com.example.wearther.community.vm.loadFeeds
+import com.example.wearther.community.vm.toggleLike
 import kotlinx.coroutines.launch
 import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
@@ -338,7 +340,7 @@ private fun FeedCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // 이미지 영역
-            if (feed.outfitImages.isEmpty()) {
+            if (feed.outfitImages.isNullOrEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

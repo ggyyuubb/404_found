@@ -4,35 +4,26 @@ import android.Manifest
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log // Log import 추가
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
 import com.example.wearther.community.vm.CommunityViewModel
+// 확장 함수 import
+import com.example.wearther.community.vm.addFeed
+import com.example.wearther.community.vm.addFeedWithImage
 import kotlinx.coroutines.launch
 import java.io.File
+
+// Logcat 검색용 태그
+private const val TAG = "AddPostScreen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,24 +35,32 @@ fun AddPostScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // --- 1. 상태 (State) ---
     var description by remember { mutableStateOf("") }
     var temperature by remember { mutableStateOf("") }
     var weather by remember { mutableStateOf("") }
-
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var aiImageUrl by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
-
     val isUploading by viewModel.isLoading.collectAsState()
     var showImageSourceDialog by remember { mutableStateOf(false) }
 
-    // AI 추천 이미지 URL 수신
+
+    // --- 2. 로직 및 이벤트 핸들러 (Logic & Event Handlers) ---
+
+    // 스낵바
+    fun showSnack(msg: String) {
+        scope.launch { snackbarHostState.showSnackbar(msg) }
+    }
+
+    // AI 이미지 선택 처리
     val selectedAiImageUrl = navController.currentBackStackEntry
         ?.savedStateHandle
         ?.get<String>("selected_image_url")
 
     LaunchedEffect(selectedAiImageUrl) {
         selectedAiImageUrl?.let {
+            Log.d(TAG, "AI 이미지 선택됨: $it") // 로그 추가
             aiImageUrl = it
             selectedImageUri = null
             navController.currentBackStackEntry
@@ -70,345 +69,213 @@ fun AddPostScreen(
         }
     }
 
-    fun showSnack(msg: String) {
-        scope.launch { snackbarHostState.showSnackbar(msg) }
+    // 업로드 성공/실패 이벤트 감지
+    LaunchedEffect(key1 = Unit, snackbarHostState) {
+        launch {
+            viewModel.uploadSuccessEvent.collect { success ->
+                if (success) {
+                    Log.d(TAG, "✅ ViewModel로부터 업로드 성공 이벤트 수신") // 로그 추가
+                    showSnack("등록 완료!")
+                    navController.popBackStack()
+                }
+            }
+        }
+        launch {
+            viewModel.errorMessage.collect { error ->
+                error?.let {
+                    Log.e(TAG, "❌ ViewModel로부터 에러 메시지 수신: $it") // 로그 추가
+                    showSnack(it)
+                    // viewModel.clearErrorMessage() // 에러 소비
+                }
+            }
+        }
     }
 
-    // 카메라 촬영
+    // 카메라/갤러리 런처
     val takePictureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
+            Log.d(TAG, "📸 카메라 촬영 성공, URI: $pendingCameraUri") // 로그 추가
             selectedImageUri = pendingCameraUri
             aiImageUrl = null
+        } else {
+            Log.w(TAG, "📸 카메라 촬영 취소 또는 실패") // 로그 추가
         }
         pendingCameraUri = null
     }
 
-    // 카메라 권한
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
+            Log.d(TAG, "✅ 카메라 권한 허용됨") // 로그 추가
             try {
                 val photoFile = File(
                     context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
                     "IMG_${System.currentTimeMillis()}.jpg"
                 )
-
                 val fileUri = FileProvider.getUriForFile(
                     context,
                     "${context.packageName}.fileprovider",
                     photoFile
                 )
-
                 pendingCameraUri = fileUri
+                Log.d(TAG, "📸 카메라 앱 실행 시도, URI: $fileUri") // 로그 추가
                 takePictureLauncher.launch(fileUri)
             } catch (e: Exception) {
-                showSnack("카메라 실행 중 오류가 발생했습니다")
+                Log.e(TAG, "❌ 카메라 실행 중 오류", e) // 로그 추가
+                showSnack("카메라 실행 중 오류가 발생했습니다: ${e.localizedMessage}")
             }
         } else {
+            Log.w(TAG, "⚠️ 카메라 권한 거부됨") // 로그 추가
             showSnack("카메라 권한이 필요합니다.")
         }
     }
 
     fun takePhoto() {
+        Log.d(TAG, "권한 요청: CAMERA") // 로그 추가
         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    // 갤러리 선택 (Android 13+)
     val pickPhoto13Plus = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let {
+            Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택됨: $it") // 로그 추가
             selectedImageUri = it
             aiImageUrl = null
-        }
+        } ?: Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택 취소") // 로그 추가
     }
 
-    // 갤러리 선택 (Legacy)
     val pickPhotoLegacy = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
+            Log.d(TAG, "🖼️ (Legacy) 갤러리 선택됨: $it") // 로그 추가
             selectedImageUri = it
             aiImageUrl = null
-        }
+        } ?: Log.d(TAG, "🖼️ (Legacy) 갤러리 선택 취소") // 로그 추가
     }
 
     fun pickFromGallery() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Log.d(TAG, "갤러리 실행 (SDK 33+)") // 로그 추가
             pickPhoto13Plus.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             )
         } else {
+            Log.d(TAG, "갤러리 실행 (Legacy)") // 로그 추가
             pickPhotoLegacy.launch("image/*")
         }
     }
 
-    // 🔥 수정된 업로드 함수
+    // 업로드 로직
     fun upload() {
+        // --- [ 💡 로그 추가 💡 ] ---
+        Log.i(TAG, "--- [ 게시물 업로드 시도 ] ---")
+        Log.d(TAG, "Description: ${description.take(50)}...") // 내용 일부만 로깅
+        Log.d(TAG, "Selected Image URI: $selectedImageUri")
+        Log.d(TAG, "AI Image URL: $aiImageUrl")
+        Log.d(TAG, "Temperature: $temperature")
+        Log.d(TAG, "Weather: $weather")
+        // --- [ 로그 추가 끝 ] ---
+
         if (description.isBlank()) {
+            Log.w(TAG, "⚠️ 내용이 비어있어 업로드 중단") // 로그 추가
             showSnack("내용을 입력해 주세요.")
             return
         }
 
-        // 1) 로컬 이미지가 있을 때 - 멀티파트 업로드 사용
+        // 1) 로컬 이미지가 있을 때
         selectedImageUri?.let { uri ->
-            viewModel.addFeedWithImage(
-                context = context,
+            // --- [ 💡 로그 추가 💡 ] ---
+            Log.d(TAG, "➡️ 로컬 이미지 업로드 함수 호출 (addFeedWithImage)")
+            // --- [ 로그 추가 끝 ] ---
+            viewModel.addFeedWithImage( // 확장 함수 호출
                 description = description,
                 temperature = temperature.ifBlank { "N/A" },
                 weather = weather.ifBlank { "N/A" },
                 imageUri = uri
             )
-            // 성공/실패는 ViewModel의 errorMessage StateFlow로 확인
-            scope.launch {
-                // 업로드 완료 대기
-                kotlinx.coroutines.delay(1000)
-                if (viewModel.errorMessage.value == null) {
-                    showSnack("등록 완료!")
-                    navController.popBackStack()
-                } else {
-                    showSnack(viewModel.errorMessage.value ?: "업로드 실패")
-                }
-            }
             return
         }
 
         // 2) AI 이미지 URL만 있을 때
         aiImageUrl?.let { url ->
-            viewModel.addFeed(
+            // --- [ 💡 로그 추가 💡 ] ---
+            Log.d(TAG, "➡️ AI 이미지 URL 업로드 함수 호출 (addFeed)")
+            // --- [ 로그 추가 끝 ] ---
+            viewModel.addFeed( // 확장 함수 호출
                 description = description,
                 temperature = temperature.ifBlank { "N/A" },
                 weather = weather.ifBlank { "N/A" },
                 imageUrl = url
             )
-            scope.launch {
-                kotlinx.coroutines.delay(1000)
-                if (viewModel.errorMessage.value == null) {
-                    showSnack("등록 완료!")
-                    navController.popBackStack()
-                } else {
-                    showSnack(viewModel.errorMessage.value ?: "업로드 실패")
-                }
-            }
             return
         }
 
         // 3) 텍스트만 게시
-        viewModel.addFeed(
+        // --- [ 💡 로그 추가 💡 ] ---
+        Log.d(TAG, "➡️ 텍스트만 업로드 함수 호출 (addFeed)")
+        // --- [ 로그 추가 끝 ] ---
+        viewModel.addFeed( // 확장 함수 호출
             description = description,
             temperature = temperature.ifBlank { "N/A" },
             weather = weather.ifBlank { "N/A" },
             imageUrl = null
         )
-        scope.launch {
-            kotlinx.coroutines.delay(1000)
-            if (viewModel.errorMessage.value == null) {
-                showSnack("등록 완료!")
-                navController.popBackStack()
-            } else {
-                showSnack(viewModel.errorMessage.value ?: "업로드 실패")
-            }
-        }
     }
 
+
+    // --- 3. UI 그리기 (Drawing UI) ---
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("게시글 작성") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "뒤로가기")
-                    }
-                },
-                actions = {
-                    TextButton(
-                        onClick = { upload() },
-                        enabled = !isUploading && description.isNotBlank()
-                    ) {
-                        Text(
-                            if (isUploading) "업로드 중..." else "등록",
-                            color = if (!isUploading && description.isNotBlank())
-                                MaterialTheme.colorScheme.primary
-                            else Color.Gray
-                        )
-                    }
-                }
+            AddPostTopBar(
+                isUploading = isUploading,
+                description = description,
+                onUploadClick = { upload() }, // upload 함수 연결 확인
+                onBackClick = { navController.popBackStack() }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
-            // 이미지 미리보기
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(300.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFF3F4F6))
-                    .clickable { showImageSourceDialog = true },
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    selectedImageUri != null -> {
-                        Image(
-                            painter = rememberAsyncImagePainter(selectedImageUri),
-                            contentDescription = "선택한 이미지",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    aiImageUrl != null -> {
-                        Image(
-                            painter = rememberAsyncImagePainter(aiImageUrl),
-                            contentDescription = "AI 추천 이미지",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    else -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("사진 추가", color = Color.Gray)
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Button(
-                onClick = { navController.navigate("ai_recommendation_picker") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            ) {
-                Icon(imageVector = Icons.Filled.PhotoLibrary, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("AI 추천 코디 선택")
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("내용을 입력하세요") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp),
-                maxLines = 10
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = temperature,
-                    onValueChange = { temperature = it },
-                    label = { Text("온도") },
-                    placeholder = { Text("예: 18°C") },
-                    modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = weather,
-                    onValueChange = { weather = it },
-                    label = { Text("날씨") },
-                    placeholder = { Text("예: 맑음") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FilledTonalButton(
-                    enabled = !isUploading,
-                    onClick = { takePhoto() }
-                ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("카메라")
-                }
-                OutlinedButton(
-                    enabled = !isUploading,
-                    onClick = { pickFromGallery() }
-                ) {
-                    Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("갤러리")
-                }
-                Spacer(Modifier.weight(1f))
-                Button(
-                    enabled = !isUploading && description.isNotBlank(),
-                    onClick = { upload() }
-                ) {
-                    Text(if (isUploading) "업로드 중..." else "업로드")
-                }
-            }
-        }
+        // AddPostForm 호출 (AddPostComposables.kt 파일에 있음)
+        AddPostForm(
+            modifier = Modifier.padding(padding),
+            description = description,
+            onDescriptionChange = { description = it },
+            temperature = temperature,
+            onTemperatureChange = { temperature = it },
+            weather = weather,
+            onWeatherChange = { weather = it },
+            selectedImageUri = selectedImageUri,
+            aiImageUrl = aiImageUrl,
+            isUploading = isUploading,
+            onImageClick = {
+                Log.d(TAG, "이미지 선택 다이얼로그 표시 요청") // 로그 추가
+                showImageSourceDialog = true
+            },
+            onAiPickerClick = {
+                Log.d(TAG, "AI 추천 화면으로 이동 요청") // 로그 추가
+                navController.navigate("ai_recommendation_picker")
+            },
+            onTakePhotoClick = { takePhoto() }, // takePhoto 함수 연결 확인
+            onPickFromGalleryClick = { pickFromGallery() } // pickFromGallery 함수 연결 확인
+        )
     }
 
+    // 다이얼로그 (AddPostComposables.kt 파일에 있음)
     if (showImageSourceDialog) {
-        AlertDialog(
-            onDismissRequest = { showImageSourceDialog = false },
-            title = { Text("사진 선택") },
-            text = {
-                Column {
-                    TextButton(
-                        onClick = {
-                            showImageSourceDialog = false
-                            takePhoto()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("카메라로 촬영")
-                    }
-                    TextButton(
-                        onClick = {
-                            showImageSourceDialog = false
-                            pickFromGallery()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("갤러리에서 선택")
-                    }
-                }
+        ImageSourceDialog(
+            onDismiss = { showImageSourceDialog = false },
+            onTakePhoto = {
+                showImageSourceDialog = false
+                takePhoto() // takePhoto 함수 연결 확인
             },
-            confirmButton = {
-                TextButton(onClick = { showImageSourceDialog = false }) {
-                    Text("닫기")
-                }
+            onPickFromGallery = {
+                showImageSourceDialog = false
+                pickFromGallery() // pickFromGallery 함수 연결 확인
             }
         )
     }

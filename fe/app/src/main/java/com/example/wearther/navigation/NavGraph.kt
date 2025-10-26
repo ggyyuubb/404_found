@@ -1,21 +1,22 @@
 package com.example.wearther.navigation
 
 import android.net.Uri
-import android.widget.Toast
-import androidx.compose.foundation.background
+// Toast import 제거 (SimpleAddPostScreen 삭제 후 불필요)
+// import android.widget.Toast
+import androidx.compose.foundation.background // background import 유지
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.Icons // Icons import 유지
+import androidx.compose.material.icons.filled.* // filled icons import 유지
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment // Alignment import 유지
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color // Color import 유지
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.dp // dp import 유지
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
+import androidx.navigation.NavController // NavController import 유지
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
@@ -26,10 +27,13 @@ import com.example.wearther.setting.screen.EditNicknameScreen
 import com.example.wearther.setting.screen.RegisterScreen
 import com.example.wearther.setting.screen.SettingScreen
 import com.example.wearther.closet.screen.ClosetScreen
+// CommunityScreen 관련 import
+import com.example.wearther.community.screen.AddPostScreen // AddPostScreen import 추가
 import com.example.wearther.community.screen.CommunityScreen
 import com.example.wearther.community.screen.SearchUserScreen
 import com.example.wearther.community.screen.UserProfileScreen
 import com.example.wearther.community.screen.PostDetailScreen
+import com.example.wearther.community.vm.CommunityViewModel // CommunityViewModel import 추가
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +64,7 @@ fun NavGraph() {
                     currentRoute == "image_crop" ||
                     currentRoute == "ai_analysis" ||
                     currentRoute == "category_selection" ||
-                    currentRoute == "add_post" ||
+                    currentRoute == "add_post" || // add_post 경로 확인
                     currentRoute == "search_user" ||
                     currentRoute?.startsWith("user_profile/") == true ||
                     currentRoute?.startsWith("post_detail/") == true
@@ -90,7 +94,7 @@ fun NavGraph() {
 
                 // 홈 화면
                 composable("home") {
-                    HomeScreen()
+                    HomeScreen() // HomeScreen은 ViewModel이 필요 없을 수 있음 (확인 필요)
                 }
 
                 // 옷장 화면
@@ -103,7 +107,7 @@ fun NavGraph() {
                     )
                 }
 
-                // 1단계: 이미지 크롭
+                // --- 옷장 업로드 플로우 ---
                 composable("image_crop") {
                     selectedImageUri?.let { uri ->
                         ImageCropScreen(
@@ -117,10 +121,9 @@ fun NavGraph() {
                                 navController.navigate("ai_analysis")
                             }
                         )
-                    }
+                    } ?: run { /* URI 없을 때 처리 (예: 이전 화면으로 복귀) */ }
                 }
 
-                // 2단계: AI 분석 로딩
                 composable("ai_analysis") {
                     croppedImageUri?.let { uri ->
                         AIAnalysisLoadingScreen(
@@ -132,64 +135,78 @@ fun NavGraph() {
                                 }
                             }
                         )
-                    }
+                    } ?: run { /* URI 없을 때 처리 */ }
                 }
 
-                // 3단계: 카테고리 확인 및 수정
                 composable("category_selection") {
                     croppedImageUri?.let { uri ->
                         CategorySelectionScreen(
                             selectedImageUri = uri,
                             aiResult = aiAnalysisResult,
                             onNavigateBack = {
+                                // 이미지 크롭 단계로 돌아가도록 수정 (선택 사항)
                                 navController.navigate("image_crop") {
-                                    popUpTo("category_selection") { inclusive = true }
+                                    popUpTo("ai_analysis") { inclusive = true } // ai_analysis 스택 제거
                                 }
                             },
                             onUploadSuccess = {
-                                // 모든 상태 초기화
+                                // 상태 초기화
                                 selectedImageUri = null
                                 croppedImageUri = null
                                 aiAnalysisResult = null
-
+                                // 옷장 화면으로 복귀
                                 navController.navigate("closet") {
                                     popUpTo("closet") { inclusive = true }
                                 }
                             }
                         )
-                    }
+                    } ?: run { /* URI 없을 때 처리 */ }
                 }
+                // --- 옷장 업로드 플로우 끝 ---
 
-                // 커뮤니티 메인 화면
+                // --- 커뮤니티 관련 화면 ---
                 composable("community") {
                     CommunityScreen(navController)
                 }
 
-                // 게시글 작성 화면
+                // [ 💡 수정: SimpleAddPostScreen -> AddPostScreen으로 변경 💡 ]
                 composable("add_post") {
-                    SimpleAddPostScreen(navController = navController)
+                    // SimpleAddPostScreen(navController = navController) // <- 삭제
+
+                    // CommunityViewModel 가져오기
+                    // (Hilt/Koin 사용 시 @HiltViewModel() 등으로 더 간단하게 가져올 수 있음)
+                    val communityViewModel: CommunityViewModel = viewModel(
+                        factory = object : ViewModelProvider.Factory {
+                            @Suppress("UNCHECKED_CAST")
+                            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                                return CommunityViewModel.provide(context) as T
+                            }
+                        }
+                    )
+                    // 실제 업로드 기능이 있는 AddPostScreen 호출
+                    AddPostScreen(
+                        navController = navController,
+                        viewModel = communityViewModel // ViewModel 전달
+                    )
                 }
 
-                // 게시글 상세 화면
                 composable(
                     route = "post_detail/{postId}",
                     arguments = listOf(
-                        navArgument("postId") { type = NavType.IntType }
+                        navArgument("postId") { type = NavType.StringType } // StringType 확인
                     )
                 ) { backStackEntry ->
-                    val postId = backStackEntry.arguments?.getInt("postId") ?: 0
+                    val postId = backStackEntry.arguments?.getString("postId") ?: ""
                     PostDetailScreen(
                         navController = navController,
-                        postId = postId
+                        postId = postId // String 타입 postId 전달 확인
                     )
                 }
 
-                // 사용자 검색 화면
                 composable("search_user") {
                     SearchUserScreen(navController = navController)
                 }
 
-                // 사용자 프로필 화면
                 composable(
                     route = "user_profile/{userId}",
                     arguments = listOf(
@@ -202,196 +219,21 @@ fun NavGraph() {
                         userId = userId
                     )
                 }
+                // --- 커뮤니티 관련 화면 끝 ---
 
-                // 설정 화면
+                // --- 설정/인증 관련 화면 ---
                 composable("settings") {
                     SettingScreen(navController)
                 }
 
-                // 회원가입 화면
                 composable("register") {
                     RegisterScreen(navController)
                 }
 
-                // 닉네임 수정 화면
                 composable("edit_nickname") {
                     EditNicknameScreen(navController)
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SimpleAddPostScreen(navController: NavController) {
-    var description by remember { mutableStateOf("") }
-    var temperature by remember { mutableStateOf("") }
-    var weather by remember { mutableStateOf("") }
-
-    val context = LocalContext.current
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("게시글 작성") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
-                    }
-                },
-                actions = {
-                    TextButton(
-                        onClick = {
-                            if (description.isNotEmpty()) {
-                                Toast.makeText(
-                                    context,
-                                    "게시글이 등록되었습니다",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                navController.popBackStack()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    "내용을 입력해주세요",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        },
-                        enabled = description.isNotEmpty()
-                    ) {
-                        Text(
-                            "등록",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = if (description.isNotEmpty())
-                                MaterialTheme.colorScheme.primary
-                            else Color.Gray
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 이미지 영역
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .background(Color(0xFFF3F4F6), MaterialTheme.shapes.medium),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        Icons.Default.CameraAlt,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = Color(0xFF9CA3AF)
-                    )
-                    Text(
-                        "이미지 기능 준비 중",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF6B7280)
-                    )
-                }
-            }
-
-            // 설명 입력
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("오늘의 코디를 소개해주세요") },
-                placeholder = { Text("예: 오늘 날씨 완전 좋아요! 가을 코디 추천합니다 🍂") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp),
-                maxLines = 5,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = Color(0xFFE5E7EB)
-                )
-            )
-
-            // 날씨 정보 입력
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = temperature,
-                    onValueChange = { temperature = it },
-                    label = { Text("온도") },
-                    placeholder = { Text("18°C") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Thermostat,
-                            contentDescription = null,
-                            tint = Color(0xFF9CA3AF)
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFFE5E7EB)
-                    )
-                )
-                OutlinedTextField(
-                    value = weather,
-                    onValueChange = { weather = it },
-                    label = { Text("날씨") },
-                    placeholder = { Text("맑음") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.WbSunny,
-                            contentDescription = null,
-                            tint = Color(0xFF9CA3AF)
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color(0xFFE5E7EB)
-                    )
-                )
-            }
-
-            // 안내 카드
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFF0F9FF)
-                ),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Lightbulb,
-                        contentDescription = null,
-                        tint = Color(0xFF0EA5E9),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "오늘 날씨에 어울리는 코디를 공유해보세요!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF0369A1)
-                    )
-                }
+                // --- 설정/인증 관련 화면 끝 ---
             }
         }
     }

@@ -23,7 +23,11 @@ interface TestApi {
 }
 
 class ProfileRepository(private val context: Context) {
-    private val api = RetrofitProvider.retrofit.create(ProfileApi::class.java)
+
+    // --- [ 💡 1. 수정 ] ---
+    // .retrofit 대신 getInstance(context) 사용
+    private val api = RetrofitProvider.getInstance(context).create(ProfileApi::class.java)
+    // --- [ 수정 끝 ] ---
 
     // JWT 토큰 테스트용 API 추가
     suspend fun testJwtToken(): Boolean = withContext(Dispatchers.IO) {
@@ -31,8 +35,11 @@ class ProfileRepository(private val context: Context) {
             val jwt = getStoredJwtToken(context) ?: return@withContext false
             Log.d("ProfileRepository", "JWT 토큰 테스트 시작")
 
-            // /user/settings GET 요청으로 JWT 테스트
-            val testApi = RetrofitProvider.retrofit.create(TestApi::class.java)
+            // --- [ 💡 2. 수정 ] ---
+            // .retrofit 대신 getInstance(context) 사용
+            val testApi = RetrofitProvider.getInstance(context).create(TestApi::class.java)
+            // --- [ 수정 끝 ] ---
+
             val response = testApi.getUserSettings("Bearer $jwt")
 
             if (response.isSuccessful) {
@@ -52,23 +59,25 @@ class ProfileRepository(private val context: Context) {
         try {
             val jwt = getStoredJwtToken(context) ?: throw IllegalStateException("로그인이 필요합니다.")
 
-            // JWT 토큰 확인용 로그 (앞 10자리만)
             Log.d("ProfileRepository", "JWT 토큰 앞부분: ${jwt.take(10)}...")
 
             val reqBody = file.asRequestBody("image/*".toMediaTypeOrNull())
             val part = MultipartBody.Part.createFormData("image", file.name, reqBody)
 
-            // 요청 정보 상세 로그
+            // --- [ 💡 3. 수정 ] ---
+            // .retrofit.baseUrl() 대신 getInstance(context).baseUrl() 사용
+            val baseUrl = RetrofitProvider.getInstance(context).baseUrl()
+            // --- [ 수정 끝 ] ---
+
             Log.d("ProfileRepository", "이미지 업로드 시작: ${file.name}")
             Log.d("ProfileRepository", "파일 크기: ${file.length()} bytes")
-            Log.d("ProfileRepository", "BASE_URL: ${RetrofitProvider.retrofit.baseUrl()}")
-            Log.d("ProfileRepository", "요청 URL: ${RetrofitProvider.retrofit.baseUrl()}user/profile_image")
+            Log.d("ProfileRepository", "BASE_URL: $baseUrl")
+            Log.d("ProfileRepository", "요청 URL: ${baseUrl}user/profile_image")
             Log.d("ProfileRepository", "Authorization 헤더: Bearer ${jwt.take(10)}...")
 
             val response = api.uploadProfileImage(part, "Bearer $jwt")
 
             if (!response.isSuccessful) {
-                // 에러 응답 상세 정보
                 val errorBody = response.errorBody()?.string() ?: "응답 없음"
                 Log.e("ProfileRepository", "업로드 실패 상세:")
                 Log.e("ProfileRepository", "  - 응답 코드: ${response.code()}")
