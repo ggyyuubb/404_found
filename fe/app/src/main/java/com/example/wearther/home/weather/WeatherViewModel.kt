@@ -1,8 +1,4 @@
 // 📁 viewmodel/WeatherViewModel.kt
-// ✅ 현재 위치 기반 날씨 정보를 가져오고, 위치를 주소(도시명 등)로 변환하여 상태로 관리하는 ViewModel입니다.
-// ✅ 날씨 API와 Geocoder를 이용해 데이터를 불러오며, 상태는 StateFlow로 Compose에서 관찰할 수 있도록 구성되어 있습니다.
-// ✅ 위치 선택 기능 추가: 여러 위치를 저장하고 선택할 수 있는 기능이 포함되어 있습니다.
-// ✅ 옷 추천 기능 추가: 날씨 조회 시 자동으로 백엔드에 날씨 데이터를 전송하여 AI 옷 추천을 받습니다.
 
 package com.example.wearther.home.weather
 
@@ -14,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -51,6 +49,27 @@ class WeatherViewModel(
         geocodingApi = RetrofitClient.geocodingApiService,
         apiKey = "9f77037105f413b870f9c9f2c1a2fb32"
     )
+
+    // ✅✅ 커뮤니티에서 사용할 현재 온도 (간단한 문자열)
+    val currentTemperature: StateFlow<String> = weatherData.map {
+        it?.current?.temp?.toInt()?.toString() ?: ""
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), "")
+
+    // ✅✅ 커뮤니티에서 사용할 현재 날씨 (한글 변환)
+    val currentWeather: StateFlow<String> = weatherData.map {
+        it?.current?.weather?.firstOrNull()?.main?.let { main ->
+            when(main.lowercase()) {
+                "clear" -> "맑음"
+                "clouds" -> "흐림"
+                "rain" -> "비"
+                "snow" -> "눈"
+                "thunderstorm" -> "천둥번개"
+                "drizzle" -> "이슬비"
+                "mist", "fog" -> "안개"
+                else -> main
+            }
+        } ?: ""
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), "")
 
     init {
         loadSavedLocations()

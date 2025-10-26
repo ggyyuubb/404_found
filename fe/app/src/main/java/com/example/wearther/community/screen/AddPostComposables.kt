@@ -27,9 +27,18 @@ import coil.compose.rememberAsyncImagePainter
 internal fun AddPostTopBar(
     isUploading: Boolean,
     description: String,
+    temperature: String, // ✅ 추가
+    weather: String,     // ✅ 추가
+    hasImage: Boolean,   // ✅ 추가
     onUploadClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
+    // ✅ 모든 필수 입력이 채워졌는지 확인
+    val isFormValid = description.isNotBlank() &&
+            temperature.isNotBlank() &&
+            weather.isNotBlank() &&
+            hasImage
+
     TopAppBar(
         title = { Text("게시글 작성") },
         navigationIcon = {
@@ -38,15 +47,24 @@ internal fun AddPostTopBar(
             }
         },
         actions = {
-            TextButton(
+            // ✅ 버튼 스타일 개선
+            Button(
                 onClick = onUploadClick,
-                enabled = !isUploading && description.isNotBlank()
+                enabled = !isUploading && isFormValid,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isFormValid)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        Color.Gray.copy(alpha = 0.3f),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color.Gray.copy(alpha = 0.3f),
+                    disabledContentColor = Color.White.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier.padding(end = 8.dp)
             ) {
                 Text(
                     if (isUploading) "업로드 중..." else "등록",
-                    color = if (!isUploading && description.isNotBlank())
-                        MaterialTheme.colorScheme.primary
-                    else Color.Gray
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
             }
         }

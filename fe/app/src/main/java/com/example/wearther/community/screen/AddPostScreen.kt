@@ -4,7 +4,7 @@ import android.Manifest
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.util.Log // Log import 추가
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,51 +16,67 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.example.wearther.community.vm.CommunityViewModel
-// 확장 함수 import
 import com.example.wearther.community.vm.addFeed
 import com.example.wearther.community.vm.addFeedWithImage
+import com.example.wearther.home.weather.WeatherViewModel // ✅ import 추가
 import kotlinx.coroutines.launch
 import java.io.File
 
-// Logcat 검색용 태그
 private const val TAG = "AddPostScreen"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPostScreen(
     navController: NavController,
-    viewModel: CommunityViewModel
+    viewModel: CommunityViewModel,
+    weatherViewModel: WeatherViewModel
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // --- 1. 상태 (State) ---
+    val currentTemp by weatherViewModel.currentTemperature.collectAsState()
+    val currentWeather by weatherViewModel.currentWeather.collectAsState()
+
     var description by remember { mutableStateOf("") }
-    var temperature by remember { mutableStateOf("") }
-    var weather by remember { mutableStateOf("") }
+    var temperature by remember(currentTemp) {
+        mutableStateOf(currentTemp.ifBlank { "" })
+    }
+    var weather by remember(currentWeather) {
+        mutableStateOf(currentWeather.ifBlank { "" })
+    }
+
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var aiImageUrl by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     val isUploading by viewModel.isLoading.collectAsState()
     var showImageSourceDialog by remember { mutableStateOf(false) }
 
+    // ✅ 이미지가 있는지 확인
+    val hasImage = selectedImageUri != null || aiImageUrl != null
 
-    // --- 2. 로직 및 이벤트 핸들러 (Logic & Event Handlers) ---
+    LaunchedEffect(currentTemp, currentWeather) {
+        if (temperature.isBlank() && currentTemp.isNotBlank()) {
+            temperature = currentTemp
+            Log.d(TAG, "🌡️ 현재 온도 자동 설정: $currentTemp°C")
+        }
+        if (weather.isBlank() && currentWeather.isNotBlank()) {
+            weather = currentWeather
+            Log.d(TAG, "☁️ 현재 날씨 자동 설정: $currentWeather")
+        }
+    }
 
-    // 스낵바
     fun showSnack(msg: String) {
         scope.launch { snackbarHostState.showSnackbar(msg) }
     }
 
-    // AI 이미지 선택 처리
     val selectedAiImageUrl = navController.currentBackStackEntry
         ?.savedStateHandle
         ?.get<String>("selected_image_url")
 
     LaunchedEffect(selectedAiImageUrl) {
         selectedAiImageUrl?.let {
-            Log.d(TAG, "AI 이미지 선택됨: $it") // 로그 추가
+            Log.d(TAG, "AI 이미지 선택됨: $it")
             aiImageUrl = it
             selectedImageUri = null
             navController.currentBackStackEntry
@@ -69,12 +85,11 @@ fun AddPostScreen(
         }
     }
 
-    // 업로드 성공/실패 이벤트 감지
     LaunchedEffect(key1 = Unit, snackbarHostState) {
         launch {
             viewModel.uploadSuccessEvent.collect { success ->
                 if (success) {
-                    Log.d(TAG, "✅ ViewModel로부터 업로드 성공 이벤트 수신") // 로그 추가
+                    Log.d(TAG, "✅ ViewModel로부터 업로드 성공 이벤트 수신")
                     showSnack("등록 완료!")
                     navController.popBackStack()
                 }
@@ -83,24 +98,22 @@ fun AddPostScreen(
         launch {
             viewModel.errorMessage.collect { error ->
                 error?.let {
-                    Log.e(TAG, "❌ ViewModel로부터 에러 메시지 수신: $it") // 로그 추가
+                    Log.e(TAG, "❌ ViewModel로부터 에러 메시지 수신: $it")
                     showSnack(it)
-                    // viewModel.clearErrorMessage() // 에러 소비
                 }
             }
         }
     }
 
-    // 카메라/갤러리 런처
     val takePictureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            Log.d(TAG, "📸 카메라 촬영 성공, URI: $pendingCameraUri") // 로그 추가
+            Log.d(TAG, "📸 카메라 촬영 성공, URI: $pendingCameraUri")
             selectedImageUri = pendingCameraUri
             aiImageUrl = null
         } else {
-            Log.w(TAG, "📸 카메라 촬영 취소 또는 실패") // 로그 추가
+            Log.w(TAG, "📸 카메라 촬영 취소 또는 실패")
         }
         pendingCameraUri = null
     }
@@ -109,7 +122,7 @@ fun AddPostScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            Log.d(TAG, "✅ 카메라 권한 허용됨") // 로그 추가
+            Log.d(TAG, "✅ 카메라 권한 허용됨")
             try {
                 val photoFile = File(
                     context.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
@@ -121,20 +134,20 @@ fun AddPostScreen(
                     photoFile
                 )
                 pendingCameraUri = fileUri
-                Log.d(TAG, "📸 카메라 앱 실행 시도, URI: $fileUri") // 로그 추가
+                Log.d(TAG, "📸 카메라 앱 실행 시도, URI: $fileUri")
                 takePictureLauncher.launch(fileUri)
             } catch (e: Exception) {
-                Log.e(TAG, "❌ 카메라 실행 중 오류", e) // 로그 추가
+                Log.e(TAG, "❌ 카메라 실행 중 오류", e)
                 showSnack("카메라 실행 중 오류가 발생했습니다: ${e.localizedMessage}")
             }
         } else {
-            Log.w(TAG, "⚠️ 카메라 권한 거부됨") // 로그 추가
+            Log.w(TAG, "⚠️ 카메라 권한 거부됨")
             showSnack("카메라 권한이 필요합니다.")
         }
     }
 
     fun takePhoto() {
-        Log.d(TAG, "권한 요청: CAMERA") // 로그 추가
+        Log.d(TAG, "권한 요청: CAMERA")
         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
@@ -142,91 +155,86 @@ fun AddPostScreen(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         uri?.let {
-            Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택됨: $it") // 로그 추가
+            Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택됨: $it")
             selectedImageUri = it
             aiImageUrl = null
-        } ?: Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택 취소") // 로그 추가
+        } ?: Log.d(TAG, "🖼️ (SDK 33+) 갤러리 선택 취소")
     }
 
     val pickPhotoLegacy = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            Log.d(TAG, "🖼️ (Legacy) 갤러리 선택됨: $it") // 로그 추가
+            Log.d(TAG, "🖼️ (Legacy) 갤러리 선택됨: $it")
             selectedImageUri = it
             aiImageUrl = null
-        } ?: Log.d(TAG, "🖼️ (Legacy) 갤러리 선택 취소") // 로그 추가
+        } ?: Log.d(TAG, "🖼️ (Legacy) 갤러리 선택 취소")
     }
 
     fun pickFromGallery() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Log.d(TAG, "갤러리 실행 (SDK 33+)") // 로그 추가
+            Log.d(TAG, "갤러리 실행 (SDK 33+)")
             pickPhoto13Plus.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             )
         } else {
-            Log.d(TAG, "갤러리 실행 (Legacy)") // 로그 추가
+            Log.d(TAG, "갤러리 실행 (Legacy)")
             pickPhotoLegacy.launch("image/*")
         }
     }
 
-    // 업로드 로직
+    // ✅✅ 업로드 로직 - 유효성 검사 추가
     fun upload() {
-        // --- [ 💡 로그 추가 💡 ] ---
         Log.i(TAG, "--- [ 게시물 업로드 시도 ] ---")
-        Log.d(TAG, "Description: ${description.take(50)}...") // 내용 일부만 로깅
+
+        // ✅ 필수 입력 체크
+        when {
+            description.isBlank() -> {
+                showSnack("내용을 입력해 주세요.")
+                return
+            }
+            !hasImage -> {
+                showSnack("사진을 추가해 주세요.")
+                return
+            }
+            temperature.isBlank() -> {
+                showSnack("온도를 입력해 주세요.")
+                return
+            }
+            weather.isBlank() -> {
+                showSnack("날씨를 입력해 주세요.")
+                return
+            }
+        }
+
+        Log.d(TAG, "Description: ${description.take(50)}...")
         Log.d(TAG, "Selected Image URI: $selectedImageUri")
         Log.d(TAG, "AI Image URL: $aiImageUrl")
         Log.d(TAG, "Temperature: $temperature")
         Log.d(TAG, "Weather: $weather")
-        // --- [ 로그 추가 끝 ] ---
 
-        if (description.isBlank()) {
-            Log.w(TAG, "⚠️ 내용이 비어있어 업로드 중단") // 로그 추가
-            showSnack("내용을 입력해 주세요.")
-            return
-        }
-
-        // 1) 로컬 이미지가 있을 때
         selectedImageUri?.let { uri ->
-            // --- [ 💡 로그 추가 💡 ] ---
             Log.d(TAG, "➡️ 로컬 이미지 업로드 함수 호출 (addFeedWithImage)")
-            // --- [ 로그 추가 끝 ] ---
-            viewModel.addFeedWithImage( // 확장 함수 호출
+            viewModel.addFeedWithImage(
                 description = description,
-                temperature = temperature.ifBlank { "N/A" },
-                weather = weather.ifBlank { "N/A" },
+                temperature = temperature,
+                weather = weather,
                 imageUri = uri
             )
             return
         }
 
-        // 2) AI 이미지 URL만 있을 때
         aiImageUrl?.let { url ->
-            // --- [ 💡 로그 추가 💡 ] ---
             Log.d(TAG, "➡️ AI 이미지 URL 업로드 함수 호출 (addFeed)")
-            // --- [ 로그 추가 끝 ] ---
-            viewModel.addFeed( // 확장 함수 호출
+            viewModel.addFeed(
                 description = description,
-                temperature = temperature.ifBlank { "N/A" },
-                weather = weather.ifBlank { "N/A" },
+                temperature = temperature,
+                weather = weather,
                 imageUrl = url
             )
             return
         }
-
-        // 3) 텍스트만 게시
-        // --- [ 💡 로그 추가 💡 ] ---
-        Log.d(TAG, "➡️ 텍스트만 업로드 함수 호출 (addFeed)")
-        // --- [ 로그 추가 끝 ] ---
-        viewModel.addFeed( // 확장 함수 호출
-            description = description,
-            temperature = temperature.ifBlank { "N/A" },
-            weather = weather.ifBlank { "N/A" },
-            imageUrl = null
-        )
     }
-
 
     // --- 3. UI 그리기 (Drawing UI) ---
     Scaffold(
@@ -234,13 +242,15 @@ fun AddPostScreen(
             AddPostTopBar(
                 isUploading = isUploading,
                 description = description,
-                onUploadClick = { upload() }, // upload 함수 연결 확인
+                temperature = temperature, // ✅ 전달
+                weather = weather,         // ✅ 전달
+                hasImage = hasImage,       // ✅ 전달
+                onUploadClick = { upload() },
                 onBackClick = { navController.popBackStack() }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        // AddPostForm 호출 (AddPostComposables.kt 파일에 있음)
         AddPostForm(
             modifier = Modifier.padding(padding),
             description = description,
@@ -253,29 +263,28 @@ fun AddPostScreen(
             aiImageUrl = aiImageUrl,
             isUploading = isUploading,
             onImageClick = {
-                Log.d(TAG, "이미지 선택 다이얼로그 표시 요청") // 로그 추가
+                Log.d(TAG, "이미지 선택 다이얼로그 표시 요청")
                 showImageSourceDialog = true
             },
             onAiPickerClick = {
-                Log.d(TAG, "AI 추천 화면으로 이동 요청") // 로그 추가
+                Log.d(TAG, "AI 추천 화면으로 이동 요청")
                 navController.navigate("ai_recommendation_picker")
             },
-            onTakePhotoClick = { takePhoto() }, // takePhoto 함수 연결 확인
-            onPickFromGalleryClick = { pickFromGallery() } // pickFromGallery 함수 연결 확인
+            onTakePhotoClick = { takePhoto() },
+            onPickFromGalleryClick = { pickFromGallery() }
         )
     }
 
-    // 다이얼로그 (AddPostComposables.kt 파일에 있음)
     if (showImageSourceDialog) {
         ImageSourceDialog(
             onDismiss = { showImageSourceDialog = false },
             onTakePhoto = {
                 showImageSourceDialog = false
-                takePhoto() // takePhoto 함수 연결 확인
+                takePhoto()
             },
             onPickFromGallery = {
                 showImageSourceDialog = false
-                pickFromGallery() // pickFromGallery 함수 연결 확인
+                pickFromGallery()
             }
         )
     }

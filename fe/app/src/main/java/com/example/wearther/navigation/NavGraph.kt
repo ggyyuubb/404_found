@@ -169,12 +169,9 @@ fun NavGraph() {
                     CommunityScreen(navController)
                 }
 
-                // [ 💡 수정: SimpleAddPostScreen -> AddPostScreen으로 변경 💡 ]
+                // [ 💡 수정: WeatherViewModel도 전달하도록 변경 💡 ]
                 composable("add_post") {
-                    // SimpleAddPostScreen(navController = navController) // <- 삭제
-
                     // CommunityViewModel 가져오기
-                    // (Hilt/Koin 사용 시 @HiltViewModel() 등으로 더 간단하게 가져올 수 있음)
                     val communityViewModel: CommunityViewModel = viewModel(
                         factory = object : ViewModelProvider.Factory {
                             @Suppress("UNCHECKED_CAST")
@@ -183,10 +180,12 @@ fun NavGraph() {
                             }
                         }
                     )
-                    // 실제 업로드 기능이 있는 AddPostScreen 호출
+
+                    // ✅✅ AddPostScreen에 weatherViewModel도 함께 전달
                     AddPostScreen(
                         navController = navController,
-                        viewModel = communityViewModel // ViewModel 전달
+                        viewModel = communityViewModel,
+                        weatherViewModel = weatherViewModel // ← 이미 위에서 생성된 weatherViewModel 전달
                     )
                 }
 
