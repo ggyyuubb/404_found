@@ -85,7 +85,7 @@ export CLAUDE_API_KEY="..."
 python app.py                        # http://localhost:8000, 문서: /docs
 ```
 
-모델 가중치는 용량 때문에 저장소에 포함하지 않았습니다. [Releases](../../releases)에서 받아 `models/`에 둡니다. `u2net.pth`는 [U-2-Net 공식 저장소](https://github.com/xuebinqin/U-2-Net)에서도 받을 수 있습니다.
+모델 가중치(`u2net.pth`, `clothing_classifier.keras`, `color_classifier.keras`)는 용량 문제로 공개하지 않았습니다. `u2net.pth`는 [U-2-Net 공식 저장소](https://github.com/xuebinqin/U-2-Net)에서 받을 수 있고, 의류·색상 모델의 학습 코드는 `training/train_models.ipynb`에 있습니다.
 
 EC2에서는 `scp`로 `app.py`와 모델 파일을 교체한 뒤 `nohup python app.py > server.log 2>&1 &`로 재기동했습니다.
 
@@ -100,7 +100,7 @@ clothing_analysis_server/
 ├── requirements.txt
 ├── training/
 │   └── train_models.ipynb   # 의류 분류·색상 모델 최종 학습 코드
-└── models/           # Releases에서 받기
+└── models/           # 가중치 (저장소 미포함)
     ├── u2net.pth
     ├── clothing_classifier.keras
     └── color_classifier.keras

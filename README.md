@@ -15,7 +15,7 @@
 ---
 
 ## [ 발표 자료 ]
-* **최종 발표 자료 및 모델 가중치:** [Releases](../../releases)
+* **최종 발표 자료:** [Releases](https://github.com/ggyyuubb/404_found/releases)
 
 ---
 
@@ -102,7 +102,7 @@ pip install -r requirements.txt
 export CLAUDE_API_KEY="..."
 python app.py                # http://localhost:8000
 ```
-모델 가중치(`u2net.pth`, `clothing_classifier.keras`, `color_classifier.keras`)는 [Releases](../../releases)에서 받아 `clothing_analysis_server/models/`에 둡니다.
+모델 가중치(`u2net.pth`, `clothing_classifier.keras`, `color_classifier.keras`)는 용량 문제로 공개하지 않았습니다. `u2net.pth`는 [U-2-Net 공식 저장소](https://github.com/xuebinqin/U-2-Net)에서 받을 수 있고, 의류·색상 모델의 학습 코드는 `clothing_analysis_server/training/`에 있습니다.
 
 ### 2) 백엔드 (`be`)
 ```bash
